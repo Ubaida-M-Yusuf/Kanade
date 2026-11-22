@@ -908,7 +908,16 @@ function renderVideoGrid() {
     $("#viewActions").onclick = (e) => {
       if (e.target.closest("[data-fyteach]")) return openTeach();
       const t = e.target.closest("[data-fytab]");
-      if (t) { S.fyTab = t.dataset.fytab; S.fyMemo = null; scroller.scrollTop = 0; render(false); return; }
+      if (t) {
+        // each tab keeps its own scroll position while its list hasn't changed (new picks reset it)
+        S.fyTabScroll = S.fyTabScroll || {};
+        S.fyTabScroll[S.fyTab] = { top: scroller.scrollTop, sig: fySig() };
+        S.fyTab = t.dataset.fytab; S.fyMemo = null;
+        const m = S.fyTabScroll[S.fyTab];
+        render(false);
+        if (m && m.sig === fySig()) { scroller.scrollTop = m.top; paint(); }
+        return;
+      }
       const b = e.target.closest("[data-mode-fy]"); if (!b) return;
       S.recMode = b.dataset.modeFy;
       try { localStorage.setItem("kanade.recmode2", S.recMode); } catch (err) { /* ignore */ }
