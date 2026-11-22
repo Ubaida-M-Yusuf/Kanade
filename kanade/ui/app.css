@@ -774,3 +774,6 @@ select option { background: var(--surface-2); }
 .alink.quiet:hover { border-bottom-color: currentColor; }
 .cp-warn { margin-top: 6px; color: var(--warn); }
 .sp-need code { font-size: 12px; word-break: break-all; }
+
+/* drag-box selection */
+.marquee { position: absolute; z-index: 20; pointer-events: none; border: 1px solid rgba(167,139,250,.9); background: rgba(167,139,250,.14); border-radius: 4px; }

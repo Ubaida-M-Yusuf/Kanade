@@ -598,6 +598,7 @@ function buildRows(groups, kind, hero = null) {
   const { cols, cardW } = measure(kind);
   V.cols = cols; V.cardW = cardW; V.kind = kind;
   const itemH = kind === "posters" ? Math.round(cardW * 1.5) + 62 : Math.round(cardW * 9 / 16) + 78;
+  V.itemH = itemH;
   const rows = [];
   if (hero) rows.push({ type: "hero", h: hero.h, html: hero.html });
   S.flat = [];
@@ -1631,7 +1632,75 @@ canvas.addEventListener("pointerdown", (e) => {
   const t = e.target.closest("[data-goanime], .poster");
   if (t) fetchAnimeDetail(Number(t.dataset.goanime || t.dataset.anime)).catch(() => {});
 });
+/* drag-box selection: press on an empty spot and drag over cards (Ctrl adds to the selection), like a file manager.
+   Hits are computed from the layout, so cards scrolled out of view (not in the page) are selected too. */
+let marquee = null;
+function marqueeHits(x0, y0, x1, y1) {
+  const [l, r, t, b] = [Math.min(x0, x1), Math.max(x0, x1), Math.min(y0, y1), Math.max(y0, y1)];
+  const hits = [];
+  for (let i = 0; i < V.rows.length; i++) {
+    const row = V.rows[i];
+    if (row.type !== "cards") continue;
+    const top = V.offsets[i], bottom = top + V.itemH;
+    if (bottom < t) continue;
+    if (top > b) break;
+    row.items.forEach((v, j) => {
+      const x = j * (V.cardW + GAP);
+      if (x < r && x + V.cardW > l) hits.push(v.id);
+    });
+  }
+  return hits;
+}
+scroller.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || V.kind !== "cards" || !isGridView() || S.view === "series") return;
+  if (e.target.closest(".card, .poster, button, a, input, select, .vrow.header, .heroRow")) return;
+  if (e.clientX - scroller.getBoundingClientRect().left >= scroller.clientWidth) return;    // the scrollbar
+  const c = canvas.getBoundingClientRect();
+  marquee = { x0: e.clientX - c.left, y0: e.clientY - c.top, cx: e.clientX, cy: e.clientY, add: e.ctrlKey || e.metaKey,
+              base: new Set(S.sel), moved: false, el: null, pid: e.pointerId };
+  e.preventDefault();
+});
+function marqueeUpdate() {
+  const m = marquee; if (!m) return;
+  const c = canvas.getBoundingClientRect();
+  const x1 = m.cx - c.left, y1 = m.cy - c.top;
+  if (!m.moved && Math.hypot(x1 - m.x0, y1 - m.y0) < 6) return;
+  if (!m.moved) {
+    m.moved = true;
+    m.el = document.createElement("div"); m.el.className = "marquee"; canvas.appendChild(m.el);
+    try { scroller.setPointerCapture(m.pid); } catch (err) { /* ignore */ }
+  }
+  Object.assign(m.el.style, { left: Math.min(m.x0, x1) + "px", top: Math.min(m.y0, y1) + "px",
+                             width: Math.abs(x1 - m.x0) + "px", height: Math.abs(y1 - m.y0) + "px" });
+  const hits = marqueeHits(m.x0, m.y0, x1, y1);
+  S.sel = new Set(m.add ? [...m.base, ...hits] : hits);
+  if (hits.length) { S.focus = hits[hits.length - 1]; S.anchor = hits[0]; }
+  refreshSelectionClasses();
+}
+scroller.addEventListener("pointermove", (e) => {
+  if (!marquee) return;
+  marquee.cx = e.clientX; marquee.cy = e.clientY;
+  marqueeUpdate();
+  // near the top or bottom edge: scroll, and keep selecting while scrolling
+  const r = scroller.getBoundingClientRect(), edge = 48;
+  const speed = e.clientY > r.bottom - edge ? 18 : e.clientY < r.top + edge ? -18 : 0;
+  clearInterval(marquee.auto);
+  if (speed && marquee.moved) marquee.auto = setInterval(() => { scroller.scrollTop += speed; marqueeUpdate(); }, 30);
+});
+function marqueeEnd(e) {
+  const m = marquee; if (!m) return;
+  marquee = null;
+  clearInterval(m.auto);
+  if (m.el) m.el.remove();
+  try { scroller.releasePointerCapture(m.pid); } catch (err) { /* ignore */ }
+  if (m.moved) { S.suppressClick = true; setTimeout(() => { S.suppressClick = false; }, 0); renderBulkbar(); }
+  else if (!m.add && S.sel.size) { S.sel = new Set(S.focus != null ? [S.focus] : []); refreshSelectionClasses(); }   // click on empty space
+}
+scroller.addEventListener("pointerup", marqueeEnd);
+scroller.addEventListener("pointercancel", marqueeEnd);
+
 canvas.addEventListener("click", (e) => {
+  if (S.suppressClick) return;
   const rb = e.target.closest("[data-rate]");
   if (rb) {
     e.stopPropagation();
@@ -1734,7 +1803,7 @@ canvas.addEventListener("mouseover", (e) => {
   hoverCard = c;
   clearTimeout(hoverTimer);
   if (!c || !S.settings.hover_preview) return;
-  if (S.scrolling) return;
+  if (S.scrolling || marquee) return;
   hoverTimer = setTimeout(() => { if (!S.scrolling && !document.hidden) startPreview(c); }, 550);
 });
 canvas.addEventListener("mouseleave", () => { clearTimeout(hoverTimer); if (hoverCard) stopPreview(hoverCard); hoverCard = null; });
