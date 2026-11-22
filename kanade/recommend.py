@@ -61,7 +61,8 @@ def engine_env() -> dict:
     return env
 
 
-MODEL_REPOS = ("m-a-p/MERT-v1-95M", "laion/larger_clap_music", "google/siglip2-base-patch16-224")
+MODEL_REPOS = ("m-a-p/MERT-v1-95M", "laion/larger_clap_music", "google/siglip2-base-patch16-224",
+               "MIT/ast-finetuned-audioset-10-10-0.4593")
 
 
 def models_downloaded() -> bool:

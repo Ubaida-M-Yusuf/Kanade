@@ -14,11 +14,11 @@ Status: **built.** This describes how it works.
   is in the toast.
 * **Sound / Sound + look + genre** switch: rank by how songs sound, or by sound plus the look of the video and the
   anime's genres and tags. The choice is remembered.
-* **Song types:** liked songs are clustered by sound (for example "Upbeat & bright", "Intense", "Calm & soft").
-  *All my taste* shows the best matches of each type (two rows each, at most two songs per series) and then
-  everything; a type chip shows all matches of that type. Groups can be renamed.
-* The details panel explains a match: the % by sound and by sound + look + genre, the closest song type, and
-  which liked song it sounds and looks most like.
+* **Song types:** every song is typed by its own sound as **Intense**, **Energetic**, **Mellow** or **Calm** (see
+  below). *All my taste* shows the best matches of each type (two rows each, at most two songs per franchise) and
+  then everything; a type chip shows all matches of that type. Types can be renamed.
+* The details panel explains a match: the % by sound and by sound + look + genre, the song type, and which liked
+  song it sounds and looks most like.
 * New results never reshuffle the page being viewed: they are used the next time For You is opened (a *Show*
   link appears in the header). The scroll position is kept when nothing changed.
 * **Settings ▸ For You · your taste:** any number of liked folders (any drive, any video format, read-only);
@@ -31,7 +31,8 @@ Everything works on **songs**: all versions, resolutions and creditless copies o
 | Part | What it is |
 |---|---|
 | Music | MERT (`m-a-p/MERT-v1-95M`, pinned revision), 3 × 10 s windows at 25/50/75 %, mid + upper layers averaged |
-| Style words | CLAP music checkpoint (`laion/larger_clap_music`): genre / mood / vocals embedding of the same windows; also names the song types |
+| Style | CLAP music checkpoint (`laion/larger_clap_music`): genre / mood / vocals embedding of the same windows |
+| Song type | AudioSet classifier (`MIT/ast-finetuned-audioset-10-10-0.4593`, pinned revision) on the same windows |
 | Look | SigLIP 2 (`google/siglip2-base-patch16-224`), averaged over the six frames the thumbnail is chosen from (the same frames for liked files and library videos) |
 | Story | the anime's AniList genres and tags (rarer ones weigh more), release year and format, OP vs ED |
 
@@ -51,12 +52,31 @@ Everything works on **songs**: all versions, resolutions and creditless copies o
    first like) minus closeness to the nearest disliked song.
 5. The score is a blend of 3 and 4, shown as a percentile within the library.
 
+**Song types.** A song's type comes from its own sound, not from which liked songs it resembles. The AudioSet
+classifier (trained on human-labelled clips) scores how much a song sounds like exciting or angry music, metal,
+punk, rock, drums, versus tender or sad music, lullabies, piano, ambient. Energy = log(high / low); ≥ 1.5 Intense,
+≥ 0 Energetic, ≥ −2.5 Mellow, else Calm. On well-known songs it puts 21 of 23 on the right side (Death Note OP2
++3.5, One Punch Man OP1 +3.7, Clannad ED1 −4.7, Violet Evergarden ED1 −4.6). Songs analysed before the classifier
+was added get their energy predicted from their music embeddings by ridge regression trained on measured songs
+(correlation 0.9 with the measured energy on held-out songs), matched to the measured spread. The types don't
+affect the ranking; they only label songs and split the sections.
+
 Learning runs after 5 new ratings, after 30 s without a new one, or when the user leaves For You, never on every
 click. During a long analysis it happens inside the running engine; otherwise a short ranking run starts (a few
 seconds, no re-analysis).
 
-**Measured accuracy** (held-out liked songs, 5 folds grouped by series, so a series is never in training and test
-at once): see the table at the end.
+**Measured accuracy** on a real library (held-out liked songs, 5 folds grouped by series, so a series is never in
+training and test at once; percentile among all songs not used for training, 100 = top):
+
+| Ranking | Median | In the top 5 % | In the top 10 % |
+|---|---|---|---|
+| Previous version (raw similarity to liked files) | 31 | – | – |
+| Sound only (learned) | 76–80 | 15–20 % | 29–34 % |
+| Sound + look + genre (learned, default) | 94–95 | 47–49 % | 66–74 % |
+
+Favourites and likes weigh 3× a liked-folder file: favourites are often newer than liked folders, and without the
+extra weight held-out favourites ranked at a median of 71 instead of 81. Liking some of the top picks makes the
+remaining top picks rise (tested: liking 10 of the top 30 moved all 20 others up; all stayed in the top 26).
 
 ## Performance
 

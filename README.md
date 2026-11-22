@@ -21,7 +21,8 @@ Everything it creates (database, thumbnails, covers, cache, logs) lives in its o
 * **Search and filters:** full-text search over titles, songs and artists; filters by OP/ED, year, season,
   format, genre, tag, quality and content rating.
 * **For You:** learns your taste from folders of openings you love, your favourites and 👍 / 👎 ratings, and ranks
-  the whole library by it (sound, look and genre; runs locally on your GPU or CPU). See
+  the whole library by it (sound, look and genre; runs locally on your GPU or CPU). Every song is also typed by its
+  own sound as Intense, Energetic, Mellow or Calm. See
   [RECOMMENDATIONS.md](RECOMMENDATIONS.md).
 * **Corrections that stick:** edit any title, song or assignment; your edits always win over automatic data.
 * **Offline first and private:** after the first setup it needs no internet; nothing about your library or
@@ -315,7 +316,8 @@ folder paths, ratings or anything about your taste. Your library database, thumb
 * Metadata: [AniList](https://anilist.co/), [Jikan](https://jikan.moe/) / MyAnimeList, [Kitsu](https://kitsu.io/).
 * AI models used by For You (downloaded from Hugging Face on install, under their own licences):
   [MERT-v1-95M](https://huggingface.co/m-a-p/MERT-v1-95M), [CLAP larger_clap_music](https://huggingface.co/laion/larger_clap_music),
-  [SigLIP 2](https://huggingface.co/google/siglip2-base-patch16-224).
+  [SigLIP 2](https://huggingface.co/google/siglip2-base-patch16-224),
+  [AST AudioSet](https://huggingface.co/MIT/ast-finetuned-audioset-10-10-0.4593).
 * UI window: [pywebview](https://pywebview.flowrl.com/); fuzzy matching: [RapidFuzz](https://github.com/rapidfuzz/RapidFuzz).
 
 ## License

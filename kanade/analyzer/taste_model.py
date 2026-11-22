@@ -77,6 +77,7 @@ class Data:
     song_dsp: list
     mean: dict                            # library means per block (to centre liked files)
     song_meta: list = field(default_factory=list)
+    song_mood: np.ndarray = None          # (n_song, 527) AudioSet probabilities, NaN rows where not measured
     taste: list = field(default_factory=list)   # liked files: dict(path, name, A, C, V, clap, dsp, twin)
     video_rating: dict = field(default_factory=dict)   # video id -> (value, at)
     favs: dict = field(default_factory=dict)            # video id -> added_at
@@ -123,8 +124,10 @@ def _meta_matrix(song_meta, year_w=None):
 
 
 def load(features_db: sqlite3.Connection, library_db: sqlite3.Connection, model_tag: str, use_favorites=True) -> Data | None:
-    rows = features_db.execute("SELECT kind, key, audio, clap, visual, name, dsp FROM feat WHERE model=? AND audio IS NOT NULL",
-                               (model_tag,)).fetchall()
+    fcols = {r[1] for r in features_db.execute("PRAGMA table_info(feat)")}
+    mood_col = "mood" if "mood" in fcols else "NULL"
+    rows = features_db.execute(f"SELECT kind, key, audio, clap, visual, name, dsp, {mood_col} FROM feat "
+                               "WHERE model=? AND audio IS NOT NULL", (model_tag,)).fetchall()
     lib = [r for r in rows if r[0] == "lib"]
     if not lib:
         return None
@@ -179,7 +182,16 @@ def load(features_db: sqlite3.Connection, library_db: sqlite3.Connection, model_
     d = Data(vid=vid, song_of=song_of, keys=keys, A=songmean(Ac), C=songmean(Cc), V=songmean(Vc),
              M=_meta_matrix(song_meta), song_name=song_name, song_anime=song_anime,
              song_clap_raw=songmean(l2(C)), song_dsp=song_dsp, mean=mean, song_meta=song_meta)
-    for kind, key, a, c, v, name, dsp in rows:
+    # AudioSet class probabilities per song (mean of its versions; NaN where not measured)
+    mood = np.full((n, 527), np.nan, np.float32)
+    acc = {}
+    for i, r in enumerate(lib):
+        if r[7] is not None:
+            acc.setdefault(int(song_of[i]), []).append(from_blob(r[7]))
+    for sidx, vs in acc.items():
+        mood[sidx] = np.mean(vs, axis=0)
+    d.song_mood = mood
+    for kind, key, a, c, v, name, dsp, md in rows:
         if kind != "taste":
             continue
         a, c, v = from_blob(a), from_blob(c, dc), from_blob(v, dv)
@@ -187,7 +199,8 @@ def load(features_db: sqlite3.Connection, library_db: sqlite3.Connection, model_
             dspd = json.loads(dsp) if dsp else None
         except ValueError:
             dspd = None
-        d.taste.append({"path": key, "name": name, "A": l2(a - mean["A"]), "C": l2(c - mean["C"]),
+        d.taste.append({"path": key, "name": name, "mood": from_blob(md) if md is not None else None,
+                        "A": l2(a - mean["A"]), "C": l2(c - mean["C"]),
                         "V": l2(v - mean["V"]), "clap": l2(c), "dsp": dspd, "twin": None})
     tables = {r[0] for r in library_db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     if "rating" in tables:
@@ -332,6 +345,83 @@ def score(d: Data, y, mode, p=PARAMS, extra_pos=None):
         dec, _ = train_logreg(X, (y > 0).astype(np.int8), w, p["lam"])
         out += p["mix_model"] * _z(dec)
     return out.astype(np.float32), nearest
+
+
+# ----------------------------------------------------------------------------- song types (calm ... intense)
+# Each song's type comes from its OWN sound: an AudioSet classifier (trained on human-labelled clips) says how much
+# it sounds like exciting / angry music, metal, punk, rock, drums vs tender / sad music, lullaby, piano, ambient.
+# Checked on well-known songs: 21 of 23 on the right side (e.g. Death Note OP2 +3.5, One Punch Man OP1 +3.7,
+# Clannad ED1 -4.7, Violet Evergarden ED1 -4.6). Songs analysed before the classifier existed get their energy
+# predicted from their music embeddings (ridge regression trained on the measured songs).
+TYPES = ["Intense", "Energetic", "Mellow", "Calm"]
+TYPE_EDGES = (1.5, 0.0, -2.5)              # energy >= 1.5 intense, >= 0 energetic, >= -2.5 mellow, else calm
+MOOD_HIGH = ["Exciting music", "Angry music", "Heavy metal", "Punk rock", "Grunge", "Rock music", "Progressive rock",
+             "Rock and roll", "Drum kit", "Electric guitar", "Yell", "Scary music"]
+MOOD_LOW = ["Tender music", "Sad music", "Lullaby", "Ambient music", "Acoustic guitar", "Piano", "Music for children",
+            "Christmas music", "Jingle, tinkle", "Soul music", "New-age music"]
+
+
+def energy_from_mood(P, labels):
+    idx = {n: i for i, n in enumerate(labels)}
+    hi = P[:, [idx[n] for n in MOOD_HIGH if n in idx]].sum(axis=1)
+    lo = P[:, [idx[n] for n in MOOD_LOW if n in idx]].sum(axis=1)
+    return np.log((hi + 1e-3) / (lo + 1e-3))
+
+
+def _ridge(X, y, lam=1.0):
+    Xm, ym = X.mean(axis=0), y.mean()
+    Xc = (X - Xm).astype(np.float64)
+    w = np.linalg.solve(Xc.T @ Xc + lam * np.eye(X.shape[1]), Xc.T @ (y - ym))
+    return lambda Z: (Z - Xm) @ w + ym
+
+
+def song_types(d: Data, labels):
+    """-> (type index per song, type index per liked file without a library copy, info dict); (None, None, info)
+    when too few songs have been measured yet."""
+    if labels is None or d.song_mood is None:
+        return None, None, {"types": "unavailable"}
+    meas = ~np.isnan(d.song_mood[:, 0])
+    if meas.sum() < 200:
+        return None, None, {"types": f"waiting ({int(meas.sum())} songs measured)"}
+    e = np.full(len(d.keys), np.nan)
+    e[meas] = energy_from_mood(d.song_mood[meas], labels)
+    X = np.concatenate([d.A, d.C], axis=1)
+    loose = [t for t in d.taste if t["twin"] is None]
+    info = {"types_measured": int(meas.sum()), "types_predicted": int((~meas).sum())}
+    if (~meas).any() or any(t["mood"] is None for t in loose):
+        mi = np.where(meas)[0]
+        rng = np.random.default_rng(0)
+        test = rng.random(len(mi)) < 0.2                    # check the prediction on measured songs first
+        f = _ridge(X[mi[~test]], e[mi[~test]], lam=3.0)
+        if test.sum() > 20:
+            info["types_prediction_corr"] = round(float(np.corrcoef(f(X[mi[test]]), e[mi[test]])[0, 1]), 3)
+        f = _ridge(X[mi], e[mi], lam=3.0)
+        ref = np.sort(e[mi])
+
+        def calibrated(Z):                                   # predictions shrink to the middle: match the spread
+            p = f(Z)
+            ranks = np.searchsorted(np.sort(f(X[mi])), p) / len(mi)
+            return ref[np.clip((ranks * (len(ref) - 1)).astype(int), 0, len(ref) - 1)]
+        miss = np.where(~meas)[0]
+        if len(miss):
+            e[miss] = calibrated(X[miss])
+    else:
+        calibrated = None
+    loose_e = []
+    for t in loose:
+        if t["mood"] is not None:
+            loose_e.append(float(energy_from_mood(t["mood"][None, :], labels)[0]))
+        elif calibrated is not None:
+            loose_e.append(float(calibrated(np.concatenate([t["A"], t["C"]])[None, :])[0]))
+        else:
+            loose_e.append(0.0)
+
+    def to_type(x):
+        x = np.asarray(x, dtype=np.float64)
+        return np.select([x >= TYPE_EDGES[0], x >= TYPE_EDGES[1], x >= TYPE_EDGES[2]], [0, 1, 2], 3)
+    t_song = to_type(e)
+    info["types_share"] = {TYPES[k]: round(float((t_song == k).mean()), 3) for k in range(len(TYPES))}
+    return t_song, list(to_type(loose_e)) if loose_e else [], info
 
 
 def percentile(x):

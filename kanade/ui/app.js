@@ -487,7 +487,8 @@ function baseItems() {
       if (S.fyTab === "hidden") return v.filter((x) => x.rating === -1);
       if (!S.rec.size) return [];
       const rated = ratedSongs();
-      return v.filter((x) => S.rec.has(x.id) && !rated.has(songKey(x)));
+      const g = S.recGroup >= 0 && S.recGroup < S.recGroups.length ? S.recGroup : -1;
+      return v.filter((x) => S.rec.has(x.id) && !rated.has(songKey(x)) && (g < 0 || bestGroup(S.rec.get(x.id)) === g));
     }
     case "anime": return v.filter((x) => x.anime_id === S.seriesId);
     default: return v;
@@ -671,7 +672,7 @@ function cardHTML(v, idx) {
   let gtag = "";
   if (S.view === "foryou" && S.recGroups.length > 1) {
     const gi = bestGroup(S.rec.get(v.id));
-    if (gi >= 0) gtag = `<span class="gtag" style="--g:${groupColor(gi)}" title="Song type: closest to your “${esc(S.recGroups[gi].name)}” liked videos">${esc(S.recGroups[gi].name)}</span>`;
+    if (gi >= 0) gtag = `<span class="gtag" style="--g:${groupColor(gi)}" title="Song type, measured from the song's own sound (calm … intense)">${esc(S.recGroups[gi].name)}</span>`;
   }
   const sub = [v.year, v.folder_season || v.season].filter(Boolean).map(esc).join(`<span class="dot"></span>`) + flag + gtag;
   return `<div class="card${sel}${multi}${many ? " stack" : ""}" data-id="${v.id}" data-idx="${idx}"${many ? ` data-stack="${members.length}"` : ""}>
@@ -1272,7 +1273,7 @@ function detailsHTML(v) {
       </dl></div>
       ${S.rec.has(v.id) ? (() => { const r = S.rec.get(v.id); return `<div class="d-sec"><h4>For You</h4><dl class="kv">
         <dt>Match</dt><dd><b>${Math.round(r.a)}%</b> by sound · <b>${Math.round(r.m)}%</b> by sound + look + genre</dd>
-        ${r.ga && S.recGroups.length > 1 ? `<dt>Best group</dt><dd>${(() => { const arr = S.recMode === "mix" ? r.gm : r.ga; const i = arr.indexOf(Math.max(...arr)); return `${esc(S.recGroups[i]?.name || "")} · ${Math.round(arr[i])}%`; })()}</dd>` : ""}
+        ${r.ga && S.recGroups.length > 1 ? `<dt>Song type</dt><dd>${(() => { const i = bestGroup(r); return i >= 0 ? esc(S.recGroups[i]?.name || "") : "—"; })()}</dd>` : ""}
         ${r.wa ? `<dt>Sounds like</dt><dd>${esc(r.wa)}</dd>` : ""}${r.wv ? `<dt>Looks like</dt><dd>${esc(r.wv)}</dd>` : ""}</dl></div>`; })() : ""}
       <div class="d-sec"><h4>Identification</h4><dl class="kv">
         <dt>Source</dt><dd>${esc(sourceLabel(v.match_source))}</dd>
@@ -1549,7 +1550,7 @@ canvas.addEventListener("click", (e) => {
   const act = e.target.closest("[data-act]");
   if (act) return heroAction(act.dataset.act);
   const tg = e.target.closest(".hlink[data-tg]");
-  if (tg) { S.recGroup = Number(tg.dataset.tg); S.groupExpanded = false; try { localStorage.setItem("kanade.recgroup", String(S.recGroup)); } catch (err) { /* ignore */ } scroller.scrollTop = 0; render(false); return; }
+  if (tg) { S.recGroup = Number(tg.dataset.tg); S.groupExpanded = false; try { localStorage.setItem("kanade.recgroup2", String(S.recGroup)); } catch (err) { /* ignore */ } scroller.scrollTop = 0; render(false); return; }
   const go = e.target.closest("[data-goanime]");
   if (go) { const gid = Number(go.dataset.goanime); if (gid !== S.seriesId) setView("anime", { seriesId: gid }); return; }
   const p = e.target.closest(".poster");
@@ -1929,10 +1930,11 @@ S.rec = new Map();          // video id -> {a: audio %, m: audio+visual %, wa, w
 S.recMode = (() => { try { return localStorage.getItem("kanade.recmode2") || "mix"; } catch (e) { return "mix"; } })();
 S.tasteDraft = [];
 S.recGroups = [];
-S.recGroup = (() => { try { return Number(localStorage.getItem("kanade.recgroup") ?? -1); } catch (e) { return -1; } })();
+S.recGroup = (() => { try { return Number(localStorage.getItem("kanade.recgroup2") ?? -1); } catch (e) { return -1; } })();
 S.groupExpanded = false;
 
-const GROUP_COLORS = ["#f472b6", "#38bdf8", "#a3e635", "#fbbf24", "#a78bfa", "#2dd4bf", "#fb923c", "#f87171"];
+// song types in order: Intense, Energetic, Mellow, Calm
+const GROUP_COLORS = ["#f87171", "#fbbf24", "#a78bfa", "#38bdf8", "#a3e635", "#2dd4bf", "#fb923c", "#f472b6"];
 const groupColor = (i) => GROUP_COLORS[i % GROUP_COLORS.length];
 
 /** The song type (taste group) a video sounds most like, in the current mode; -1 when unknown. */
@@ -1987,9 +1989,9 @@ function renderTasteBar() {
   const members = cur ? cur.members : [];
   const shown = S.groupExpanded ? members : members.slice(0, 6);
   bar.innerHTML = `<div class="tchips">${chip(-1, "✨ All my taste", null)}${S.recGroups.map((x) => chip(x.id, esc(x.name), x.size)).join("")}</div>
-    ${cur ? `<div class="tmembers"><span>Built from your liked videos:</span> ${shown.map((n) => `<i>${esc(n)}</i>`).join("")}
+    ${cur ? `<div class="tmembers"><span>Your liked songs of this type:</span> ${shown.map((n) => `<i>${esc(n)}</i>`).join("")}
       ${members.length > 6 ? `<button class="tmore" data-tmore="1">${S.groupExpanded ? "show less" : `+${members.length - 6} more`}</button>` : ""}</div>`
-          : `<div class="tmembers"><span>Your liked videos fall into ${S.recGroups.length} song types by sound. ${S.sort === "match" ? "Below: the best matches of each type, then everything." : ""} Pick a type to see all its matches.</span></div>`}`;
+          : `<div class="tmembers"><span>Every song is typed by its own sound, from calm to intense. ${S.sort === "match" ? "Below: your best matches of each type, then everything." : ""} Pick a type to see all its matches.</span></div>`}`;
 }
 
 $("#tasteBar").addEventListener("click", async (e) => {
@@ -2009,7 +2011,7 @@ $("#tasteBar").addEventListener("click", async (e) => {
   const c = e.target.closest("[data-tg]");
   if (c) {
     S.recGroup = Number(c.dataset.tg); S.groupExpanded = false;
-    try { localStorage.setItem("kanade.recgroup", String(S.recGroup)); } catch (err) { /* ignore */ }
+    try { localStorage.setItem("kanade.recgroup2", String(S.recGroup)); } catch (err) { /* ignore */ }
     render(false); return;
   }
   if (e.target.closest("[data-tmore]")) { S.groupExpanded = !S.groupExpanded; renderTasteBar(); }

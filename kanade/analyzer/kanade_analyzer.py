@@ -6,7 +6,8 @@ main app stays small. It never modifies any video: it only reads them.
   * Audio similarity: MERT (m-a-p/MERT-v1-95M, music model trained on rhythm/timbre/harmony) embeddings of three
     10-second windows of each video's soundtrack. In a same-song retrieval test it found the right song 15/17 times
     vs 4/17 for CLAP, whose embeddings are nearly identical for all songs.
-  * Group names: CLAP (laion/larger_clap_music) audio embeddings matched against short text descriptions.
+  * Song type (calm ... intense): an AudioSet sound classifier (MIT/ast-finetuned-audioset, trained on
+    human-labelled clips: exciting / angry / tender / sad music, rock, metal, lullaby, piano...) on the same windows.
   * Visual: SigLIP 2 (google/siglip2-base-patch16-224) embedding of the video's thumbnail (library videos) or
     of a few keyframes (liked videos outside the library).
   * Pace: scene-cut rate from the video's keyframe count (no decoding needed).
@@ -38,6 +39,8 @@ AUDIO_MODEL = "laion/larger_clap_music"           # used for naming taste groups
 MERT_MODEL = "m-a-p/MERT-v1-95M"                    # used for music similarity
 MERT_REVISION = "12af15fef9d0ac838c3f475bfbbf26d2060dd4f5"   # pinned: the model ships its own (reviewed) code
 VISUAL_MODEL = "google/siglip2-base-patch16-224"
+MOOD_MODEL = "MIT/ast-finetuned-audioset-10-10-0.4593"     # AudioSet classifier: how calm / intense a song sounds
+MOOD_REVISION = "f826b80d28226b62986cc218e5cec390b1096902"
 MODEL_TAG = "mert95m+clap-music+siglip2-b16-224/v3-6frames"
 VIDEO_EXTS = {".webm", ".mkv", ".mp4", ".m4v", ".avi", ".mov", ".wmv", ".flv", ".mpg", ".mpeg", ".ts"}
 SR = 48000
@@ -83,26 +86,6 @@ DROP TABLE IF EXISTS taste_group;
 CREATE TABLE taste_group(id INTEGER PRIMARY KEY, name TEXT, size INTEGER, members TEXT);
 """
 
-# Words used to describe taste groups. CLAP embeds text and audio in the same space, so each group is named by
-# the mood, style and vocals that are most characteristic of it compared with the user's other groups.
-LABEL_FACETS = {
-    "mood": [("Calm", "calm, relaxing, gentle music"), ("Energetic", "energetic, intense, high-energy music"),
-             ("Emotional", "emotional, melancholic, bittersweet music"), ("Happy", "happy, cheerful, uplifting music"),
-             ("Dark", "dark, mysterious, ominous music"), ("Epic", "epic, dramatic, heroic music"),
-             ("Playful", "cute, playful, bubbly music"), ("Dreamy", "dreamy, ethereal, atmospheric music"),
-             ("Aggressive", "aggressive, angry, heavy music"), ("Nostalgic", "nostalgic, warm, retro music")],
-    "style": [("rock", "rock music with electric guitars"), ("metal", "heavy metal music"), ("pop", "pop music"),
-              ("electronic", "electronic dance music with synthesizers"), ("orchestral", "orchestral music with strings"),
-              ("ballad", "a slow piano ballad"), ("jazz", "jazz music with brass"), ("hip-hop", "hip hop music with rap"),
-              ("acoustic", "acoustic guitar music"), ("punk", "fast punk rock music"), ("city pop", "1980s city pop"),
-              ("idol pop", "japanese idol pop music"), ("funk", "funky groovy music with bass"),
-              ("folk", "folk music with traditional instruments")],
-    "vocals": [("female vocals", "a song sung by a female singer"), ("male vocals", "a song sung by a male singer"),
-               ("choir", "a song sung by a choir"), ("instrumental", "instrumental music without vocals"),
-               ("duet", "a duet with male and female singers")],
-}
-LABEL_VERSION = 2
-
 # ----------------------------------------------------------------------------- helpers
 
 class Engine:
@@ -119,7 +102,9 @@ class Engine:
         if "clap" not in cols:
             self.db.execute("ALTER TABLE feat ADD COLUMN clap BLOB")
         if "dsp" not in cols:
-            self.db.execute("ALTER TABLE feat ADD COLUMN dsp TEXT")   # loudness / brightness / activity (naming)
+            self.db.execute("ALTER TABLE feat ADD COLUMN dsp TEXT")   # loudness / brightness / activity
+        if "mood" not in cols:
+            self.db.execute("ALTER TABLE feat ADD COLUMN mood BLOB")  # AudioSet class probabilities (float16, 527)
         self.db.commit()
         self.cfg = json.loads((self.home / "config.json").read_text(encoding="utf-8-sig"))
         self.stamps = self.home / "engine"
@@ -452,6 +437,10 @@ class Models:
         self.clap = ClapModel.from_pretrained(AUDIO_MODEL, torch_dtype=half).to(self.dev).eval()
         self.clap_proc = ClapProcessor.from_pretrained(AUDIO_MODEL)
         self.vis = AutoModel.from_pretrained(VISUAL_MODEL, torch_dtype=half).to(self.dev).eval()
+        from transformers import ASTFeatureExtractor, ASTForAudioClassification
+        self.mood = ASTForAudioClassification.from_pretrained(MOOD_MODEL, revision=MOOD_REVISION, torch_dtype=half).to(self.dev).eval()
+        self.mood_proc = ASTFeatureExtractor.from_pretrained(MOOD_MODEL, revision=MOOD_REVISION)
+        self.mood_labels = [self.mood.config.id2label[i] for i in range(self.mood.config.num_labels)]
         import gc
         gc.collect()                                   # drop the CPU-side copies left over from loading
         self.vis_proc = AutoImageProcessor.from_pretrained(VISUAL_MODEL)
@@ -520,13 +509,21 @@ class Models:
                 size = max(1, size // 2)
         return np.concatenate(out) if out else np.zeros((0, 1), np.float32)
 
-    def texts(self, texts):
+    def mood_inputs(self, windows):
+        """CPU part of the AudioSet classifier: 16 kHz filterbanks of the windows."""
+        x16 = [w[: len(w) // 3 * 3].reshape(-1, 3).mean(axis=1).astype(np.float32) for w in windows]   # 48 -> 16 kHz
+        return np.asarray(self.mood_proc(x16, sampling_rate=16000, return_tensors="np")["input_values"])
+
+    def mood_from_inputs(self, parts):
+        """GPU part: list of mood_inputs() results -> (n_windows, 527) class probabilities."""
         torch = self.torch
-        inputs = self.clap_proc(text=texts, return_tensors="pt", padding=True)
-        inputs = {k: v.to(self.dev) for k, v in inputs.items() if k in ("input_ids", "attention_mask")}
-        with torch.no_grad():
-            f = self.clap.get_text_features(**inputs)
-        return l2(f.float().cpu().numpy())
+        cat = np.concatenate(parts)
+
+        def run(idx):
+            x = torch.from_numpy(np.ascontiguousarray(cat[idx[0]:idx[-1] + 1])).to(self.dev, self.half)
+            with torch.no_grad():
+                return torch.sigmoid(self.mood(x).logits.float()).cpu().numpy()
+        return self.chunked(run, list(range(len(cat))), 6)
 
     def images(self, imgs):
         torch = self.torch
@@ -636,8 +633,10 @@ def frames_item(eng: Engine, item, dur, audio, models):
         im = im.copy()
         im.thumbnail((320, 320))
         small.append(im)
-    clapin = models.clap_inputs(audio_windows(audio)) if audio is not None else None
-    return item, audio, small, dur, cuts, (audio_stats(audio) if audio is not None else None), thumb, clapin
+    wins = audio_windows(audio) if audio is not None else []
+    clapin = models.clap_inputs(wins) if wins else None
+    moodin = models.mood_inputs(wins) if wins else None
+    return item, audio, small, dur, cuts, (audio_stats(audio) if audio is not None else None), thumb, clapin, moodin
 
 
 def analyse(eng: Engine):
@@ -648,7 +647,9 @@ def analyse(eng: Engine):
         return
     eng.set_status(force=True, phase="Loading AI models", current="first run downloads ~2 GB")
     models = Models()
-    store_label_vectors(eng, models)
+    eng.db.execute("INSERT INTO meta(key,value) VALUES('mood_labels',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                   (json.dumps(models.mood_labels),))
+    eng.db.commit()
     eng.set_status(force=True, phase="Analysing videos", current=f"on {models.dev.upper()}")
     from concurrent.futures import ThreadPoolExecutor
     q: queue.Queue = queue.Queue(maxsize=8)       # small read-ahead: bounded memory
@@ -656,14 +657,14 @@ def analyse(eng: Engine):
     pool = ThreadPoolExecutor(max_workers=FRAME_WORKERS, thread_name_prefix="frames")
 
     def failed_item(item):
-        return item, None, [], None, None, None, None, None
+        return item, None, [], None, None, None, None, None, None
 
     def cpu_stage(item, dur, audio):
         try:
             return frames_item(eng, item, dur, audio, models)
         except Exception as e:
             print("frames failed", item[3], e, flush=True)
-            return item, None, [], dur, None, None, None, None     # retried next run
+            return item, None, [], dur, None, None, None, None, None     # retried next run
 
     def producer():
         # ONE disk reader: on a hard disk 2-3 parallel readers make every file slower (0.36 -> 0.56 -> 0.88 s)
@@ -698,6 +699,8 @@ def analyse(eng: Engine):
         a_emb = models.chunked(models.audio, wins, 6) if wins else np.zeros((0, 1))
         clap_parts = [b[7] for b in batch if b[1] is not None]
         c_emb = models.clap_from_inputs(clap_parts) if clap_parts else np.zeros((0, 1))
+        mood_parts = [b[8] for b in batch if b[1] is not None]
+        m_emb = models.mood_from_inputs(mood_parts) if mood_parts else np.zeros((0, 1))
         imgs, img_owner = [], []
         for i, (_, audio, ims, *_rest) in enumerate(batch):
             if audio is None:
@@ -707,7 +710,7 @@ def analyse(eng: Engine):
                 img_owner.append(i)
         v_emb = models.chunked(models.images, imgs, 8) if imgs else np.zeros((0, 1))
         now = time.time()
-        for i, (item, audio, ims, dur, cuts, dsp, thumb, _) in enumerate(batch):
+        for i, (item, audio, ims, dur, cuts, dsp, thumb, _, _m) in enumerate(batch):
             kind, key, fp, path, _, _, name = item
             if audio is None:
                 failed[0] += 1             # unreadable right now (disk asleep, file in use...): retried next run
@@ -718,16 +721,18 @@ def analyse(eng: Engine):
             a = a_emb[[j for j, o in enumerate(owners) if o == i]]
             v = v_emb[[j for j, o in enumerate(img_owner) if o == i]]
             cl = c_emb[[j for j, o in enumerate(owners) if o == i]]
+            md = m_emb[[j for j, o in enumerate(owners) if o == i]]
+            md = md.mean(axis=0) if len(md) else None
             a = l2(a.mean(axis=0)) if len(a) else None
             cl = l2(cl.mean(axis=0)) if len(cl) else None
             v = l2(v.mean(axis=0)) if len(v) else None
-            eng.db.execute("INSERT INTO feat(kind,key,fp,model,audio,clap,visual,cuts,duration,name,at,dsp) "
-                           "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) "
+            eng.db.execute("INSERT INTO feat(kind,key,fp,model,audio,clap,visual,cuts,duration,name,at,dsp,mood) "
+                           "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) "
                            "ON CONFLICT(kind,key) DO UPDATE SET fp=excluded.fp, model=excluded.model, audio=excluded.audio, "
                            "clap=excluded.clap, visual=excluded.visual, cuts=excluded.cuts, duration=excluded.duration, "
-                           "name=excluded.name, at=excluded.at, dsp=excluded.dsp",
+                           "name=excluded.name, at=excluded.at, dsp=excluded.dsp, mood=excluded.mood",
                            (kind, key, fp, MODEL_TAG, to_blob(a), to_blob(cl), to_blob(v), cuts, dur, name, now,
-                            json.dumps(dsp) if dsp else None))
+                            json.dumps(dsp) if dsp else None, to_blob(md)))
         eng.db.commit()
         batch.clear()
         flushes[0] += 1
@@ -774,158 +779,6 @@ def rank_requested(eng: Engine, since: float) -> bool:
         return False
 
 
-# ----------------------------------------------------------------------------- taste groups
-
-def store_label_vectors(eng: Engine, models=None):
-    """Embed the describing words once (needs the CLAP text tower) and keep them in features.db."""
-    row = eng.db.execute("SELECT value FROM meta WHERE key='label_vectors'").fetchone()
-    if row:
-        try:
-            if json.loads(row[0]).get("version") == LABEL_VERSION:
-                return
-        except ValueError:
-            pass
-    if models is None:
-        models = Models()
-    out = {"version": LABEL_VERSION, "facets": {}}
-    for facet, items in LABEL_FACETS.items():
-        vecs = models.texts([d for _, d in items])
-        out["facets"][facet] = {"names": [n for n, _ in items], "vectors": vecs.astype(np.float32).tolist()}
-    eng.db.execute("INSERT INTO meta(key,value) VALUES('label_vectors',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                   (json.dumps(out),))
-    eng.db.commit()
-
-
-def label_vectors(eng: Engine):
-    row = eng.db.execute("SELECT value FROM meta WHERE key='label_vectors'").fetchone()
-    if not row:
-        return None
-    d = json.loads(row[0])
-    if d.get("version") != LABEL_VERSION:
-        return None
-    return {f: (v["names"], l2(np.asarray(v["vectors"], dtype=np.float32))) for f, v in d["facets"].items()}
-
-
-def spherical_kmeans(X, k, rng, iters=60, restarts=10):
-    """k-means on the unit sphere (cosine), k-means++ seeding, best of several restarts."""
-    best = None
-    n = len(X)
-    for _ in range(restarts):
-        C = [X[rng.integers(n)]]
-        for _ in range(1, k):
-            d = np.clip(1.0 - np.max(X @ np.stack(C).T, axis=1), 0, None)
-            p = d / d.sum() if d.sum() > 0 else None
-            C.append(X[rng.choice(n, p=p)])
-        C = np.stack(C)
-        for _ in range(iters):
-            lab = np.argmax(X @ C.T, axis=1)
-            newC = np.stack([l2(X[lab == j].mean(axis=0)) if (lab == j).any() else C[j] for j in range(k)])
-            if np.allclose(newC, C, atol=1e-5):
-                break
-            C = newC
-        lab = np.argmax(X @ C.T, axis=1)
-        inertia = float(np.sum(1.0 - np.max(X @ C.T, axis=1)))
-        if best is None or inertia < best[0]:
-            best = (inertia, lab, C)
-    return best[1], best[2]
-
-
-def silhouette(X, lab):
-    D = np.clip(1.0 - X @ X.T, 0, None)
-    ks = np.unique(lab)
-    if len(ks) < 2:
-        return -1.0
-    s = []
-    for i in range(len(X)):
-        same = lab == lab[i]
-        if same.sum() <= 1:
-            s.append(0.0)
-            continue
-        a = D[i, same].sum() / (same.sum() - 1)
-        b = min(D[i, lab == k].mean() for k in ks if k != lab[i])
-        s.append((b - a) / max(a, b, 1e-9))
-    return float(np.mean(s))
-
-
-def taste_groups(TA, rng):
-    """Cluster liked songs by sound; the number of groups (1-8) is picked by silhouette score."""
-    n = len(TA)
-    if n < 12:
-        return np.zeros(n, dtype=int)
-    best = (0.02, np.zeros(n, dtype=int))           # one group unless clusters separate clearly
-    for k in range(2, min(8, n // 6) + 1):
-        lab, _ = spherical_kmeans(TA, k, rng)
-        sizes = np.bincount(lab, minlength=k)
-        if sizes.min() < 3:
-            continue
-        sc = silhouette(TA, lab)
-        if sc > best[0]:
-            best = (sc, lab)
-    # renumber: biggest group first
-    lab = best[1]
-    order = np.argsort(-np.bincount(lab))
-    remap = {int(old): new for new, old in enumerate(order)}
-    return np.array([remap[int(x)] for x in lab])
-
-
-def name_groups(eng, lab, TC, dsp):
-    """Describe each taste group in words.
-
-    Mood + tone come from plain acoustic measurements (reliable): how loud and busy the music is (calm ... intense)
-    and how bright or bass-heavy it sounds. A style word comes from CLAP: the style the group matches clearly more
-    than the user's other groups do ("lift" of zero-shot probabilities).
-    """
-    n = int(lab.max()) + 1
-    names = []
-    # --- mood & tone from measurements, relative to all of the user's liked videos
-    have = [i for i, d in enumerate(dsp) if d]
-    if len(have) >= 6:
-        keys = ("loud", "activity", "bright", "bass", "dyn")
-        Mx = np.array([[dsp[i][k] for k in keys] for i in have], dtype=np.float64)
-        mu, sd = Mx.mean(axis=0), Mx.std(axis=0) + 1e-9
-        Z = (Mx - mu) / sd
-        labh = lab[have]
-        zs = [Z[labh == g].mean(axis=0) if (labh == g).any() else np.zeros(len(keys)) for g in range(n)]
-        energy = np.array([0.5 * z[0] + 0.5 * z[1] - 0.25 * z[4] for z in zs])
-        tone = np.array([z[2] - 0.6 * z[3] for z in zs])
-        order = np.argsort(energy)                       # groups are named relative to each other
-        for g in range(n):
-            if n > 1 and g == order[-1]:
-                mood = "Intense"
-            elif n > 1 and g == order[0]:
-                mood = "Calm"
-            else:
-                mood = "Upbeat" if energy[g] >= np.median(energy) else "Mellow"
-            loud = energy[g] >= np.median(energy)
-            shade = "bright" if tone[g] > 0.25 else (("heavy" if loud else "soft") if tone[g] < -0.25 else "")
-            names.append([mood, shade])
-    else:
-        names = [[f"Group {chr(65 + g)}", ""] for g in range(n)]
-    # --- style word from CLAP zero-shot, by lift over the user's other groups
-    facets = label_vectors(eng)
-    if facets and TC is not None and len(TC) == len(lab):
-        sty_names, sty_vecs = facets["style"]
-        logits = 100.0 * (TC @ sty_vecs.T)
-        P = np.exp(logits - logits.max(axis=1, keepdims=True))
-        P /= P.sum(axis=1, keepdims=True)
-        overall = P.mean(axis=0) + 1e-9
-        for g in range(n):
-            pg = P[lab == g].mean(axis=0)
-            lift = pg / overall
-            ok = pg >= 0.5 * pg.max()                       # must also be one of the group's likelier styles
-            j = int(np.argmax(np.where(ok, lift, 0)))
-            names[g].append(sty_names[j] if lift[j] > 1.15 else "")
-    out = []
-    for g in range(n):
-        mood, shade, *style = names[g]
-        style = style[0] if style else ""
-        text = mood + (f" & {shade}" if shade else "") + (f" {style}" if style else "")
-        while text in out:
-            text += " ·"
-        out.append(text)
-    return out
-
-
 # ----------------------------------------------------------------------------- ranking
 
 def ensure_rec_tables(eng: Engine):
@@ -958,11 +811,6 @@ def rank(eng: Engine):
         eng.db.execute("DELETE FROM taste_group")
         eng.db.commit()
         return
-    try:
-        store_label_vectors(eng)
-    except Exception as e:                           # naming is cosmetic; never block ranking
-        print("group naming unavailable:", e, flush=True)
-
     pos = np.where(y > 0)[0]
     loose = [t for t in d.taste if t["twin"] is None]   # liked files that aren't in the library
     m_fill = tm.l2(d.M[pos].mean(axis=0)) if len(pos) else np.zeros(d.M.shape[1], np.float32)
@@ -980,27 +828,20 @@ def rank(eng: Engine):
     pa, pm = tm.percentile(s_a), tm.percentile(s_m)
     like_names = [d.song_name[s] for s in pos] + [t["name"] for t in loose]   # same order as score() uses
 
-    # taste groups: the liked songs clustered by sound
-    TA = np.concatenate([d.A[pos]] + ([np.stack([t["A"] for t in loose])] if loose else []))
-    TC = np.concatenate([d.song_clap_raw[pos]] + ([np.stack([t["clap"] for t in loose])] if loose else []))
-    dsp = [d.song_dsp[s] for s in pos] + [t["dsp"] for t in loose]
-    lab = taste_groups(TA, np.random.default_rng(7))
-    n_groups = int(lab.max()) + 1 if len(lab) else 1
+    # song types: each song's own measured energy (AudioSet classifier), calm ... intense. Liked songs of each type
+    # are listed with it; the For You sections show the best matches of each type.
+    mood_labels = None
+    row = eng.db.execute("SELECT value FROM meta WHERE key='mood_labels'").fetchone()
+    if row:
+        mood_labels = json.loads(row[0])
+    t_song, t_loose, mood_info = tm.song_types(d, mood_labels)
+    n_groups = len(tm.TYPES) if t_song is not None else 0      # no types until enough songs are measured
     group_pa, group_pm, groups = [], [], []
-    if n_groups > 1:
-        Za, Zm = tm.similarity_space(d, "audio"), tm.similarity_space(d, "mix")
-        Pa = np.concatenate([Za[pos]] + ([la] if la is not None else []))
-        Pm = np.concatenate([Zm[pos]] + ([lm] if lm is not None else []))
-        names = name_groups(eng, lab, TC, dsp)
-        for g in range(n_groups):
-            sel = np.where(lab == g)[0]
-            ka = tm._topk_mean(Za @ Pa[sel].T, 3)
-            km = tm._topk_mean(Zm @ Pm[sel].T, 3)
-            group_pa.append(tm.percentile(tm._z(ka) + 0.35 * tm._z(s_a)))
-            group_pm.append(tm.percentile(tm._z(km) + 0.35 * tm._z(s_m)))
-            centre = tm.l2(TA[sel].mean(axis=0))
-            order = sel[np.argsort(-(TA[sel] @ centre))]
-            groups.append((g, names[g], len(sel), json.dumps([like_names[i] for i in order], ensure_ascii=False)))
+    for g, name in enumerate(tm.TYPES[:n_groups]):
+        group_pa.append(np.where(t_song == g, pa, -1.0))
+        group_pm.append(np.where(t_song == g, pm, -1.0))
+        liked = [d.song_name[s] for s in pos if t_song[s] == g] + [t["name"] for t, tt in zip(loose, t_loose) if tt == g]
+        groups.append((g, name, len(liked), json.dumps(liked, ensure_ascii=False)))
 
     def gjoin(arrs, s):
         return ",".join(f"{a[s]:.1f}" for a in arrs) if arrs else None
@@ -1011,7 +852,7 @@ def rank(eng: Engine):
         s = int(d.song_of[i])
         rows.append((int(v), round(float(pa[s]), 1), round(float(pm[s]), 1), like_names[near_a[s]],
                      like_names[near_m[s]], gjoin(group_pa, s), gjoin(group_pm, s), int(s in in_folders)))
-    summary = {"liked_songs": int(len(pos)), "disliked_songs": int((y < 0).sum()),
+    summary = {**mood_info, "liked_songs": int(len(pos)), "disliked_songs": int((y < 0).sum()),
                "twins": sum(1 for t in d.taste if t["twin"] is not None), "loose": len(loose),
                "songs": len(d.keys), "seconds": round(time.time() - t0, 2)}
     # swap in the new results in ONE transaction: if the engine is stopped mid-way, the previous list stays
