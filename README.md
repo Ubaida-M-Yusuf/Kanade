@@ -78,9 +78,14 @@ anywhere.
 ### Option A: the packaged app
 0. Get the code: `git clone https://github.com/Ubaida-M-Yusuf/Kanade` (or download the ZIP from GitHub).
 1. Run `dist\Kanade\Kanade.exe` (build it with `build.bat`, see below).
-2. On first run, choose your archive folder (the folder that contains `2008\`, `2009\`, `90s\` and so on).
+2. On first run a welcome window asks for your library folder (for example the folder that contains `2008\`,
+   `2009\`, `90s\` and so on), then offers the optional For You download (AI engine and models, about 3–6 GB,
+   with a progress bar). "Not now" is fine: For You asks again, with the same window, the first time you open it.
 3. Kanade scans the folder, downloads the AnimeThemes catalogue (about 4 minutes) and identifies every file.
    Thumbnails are generated in the background. You can browse while that runs.
+4. For You: the first time you open it, pick one or more folders of openings you love. *Settings ▸ For You*
+   lists the AI models (what each does, size, downloaded or not) and can download anything missing. Nothing is
+   ever downloaded without asking.
 
 ### Option B: run from source
 Requirements: Windows 10/11, Python 3.12, FFmpeg, and the Microsoft Edge WebView2 runtime (included with Windows 11).

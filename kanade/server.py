@@ -141,6 +141,8 @@ def api_get(path: str, qs: dict):
         st = manager().status()
         st["counts"] = counts_cached()
         return st
+    if path == "/api/engine/info":
+        return recommend.engine_info()
     if path == "/api/remote-search":
         try:
             return {"results": library.remote_search(g("q", ""), g("source", "library"))}
@@ -149,7 +151,8 @@ def api_get(path: str, qs: dict):
         except Exception as e:
             return {"results": [], "error": f"{type(e).__name__}: {e}"}
     if path == "/api/ollama":
-        return {"available": ollama.available(), "models": ollama.models()}
+        ok = ollama.available()
+        return {"available": ok, "models": ollama.models() if ok else []}
     raise ApiError("unknown endpoint", 404)
 
 

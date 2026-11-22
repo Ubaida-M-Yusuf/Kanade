@@ -61,13 +61,68 @@ def engine_env() -> dict:
     return env
 
 
-MODEL_REPOS = ("m-a-p/MERT-v1-95M", "laion/larger_clap_music", "google/siglip2-base-patch16-224",
-               "MIT/ast-finetuned-audioset-10-10-0.4593")
+# The AI models For You uses: (repository, what it does, download size in MB)
+MODELS = [
+    ("m-a-p/MERT-v1-95M", "Music: rhythm, timbre and harmony (finds songs that sound alike)", 360),
+    ("laion/larger_clap_music", "Music style: genre, mood, vocals", 745),
+    ("google/siglip2-base-patch16-224", "Look of the video: art style, colours, era", 1430),
+    ("MIT/ast-finetuned-audioset-10-10-0.4593", "Song type: calm ... intense", 330),
+]
+MODEL_REPOS = tuple(m[0] for m in MODELS)
+TORCH_MB = {True: 2600, False: 250}       # PyTorch download with / without NVIDIA GPU support
+LIBS_MB = 300
+
+
+def model_downloaded(repo: str) -> bool:
+    hub = engine_dir() / "hf" / "hub" / ("models--" + repo.replace("/", "--")) / "snapshots"
+    return any(hub.glob("*/config.json"))
 
 
 def models_downloaded() -> bool:
-    hub = engine_dir() / "hf" / "hub"
-    return all(any((hub / ("models--" + r.replace("/", "--")) / "snapshots").glob("*/config.json")) for r in MODEL_REPOS)
+    return all(model_downloaded(r) for r in MODEL_REPOS)
+
+
+def _hub_mb() -> float:
+    """Megabytes in the model cache, including files still being downloaded."""
+    total = 0
+    for root, _, files in os.walk(engine_dir() / "hf" / "hub"):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return total / 1e6
+
+
+def has_taste() -> bool:
+    """Something to learn from: liked folders, or favourites / likes (when they count)."""
+    if taste_folders():
+        return True
+    from . import db
+    if settings().get("taste_use_favorites", True) and db.q1("SELECT 1 FROM favorite LIMIT 1"):
+        return True
+    return bool(db.q1("SELECT 1 FROM rating LIMIT 1"))
+
+
+_gpu_cache: dict = {}
+
+
+def engine_info() -> dict:
+    """What For You needs and what is already on this computer (for Settings and the set-up pop-ups)."""
+    try:
+        ready = json.loads((engine_dir() / "ready.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        ready = {}
+    installed = engine_ready()
+    if "gpu" not in _gpu_cache:
+        _gpu_cache["gpu"] = has_nvidia_gpu()
+    gpu = ready.get("gpu", _gpu_cache["gpu"]) if installed else _gpu_cache["gpu"]
+    models = [{"repo": r, "purpose": what, "size_mb": mb, "downloaded": model_downloaded(r)} for r, what, mb in MODELS]
+    need = sum(m["size_mb"] for m in models if not m["downloaded"])
+    if not installed:
+        need += TORCH_MB[bool(gpu)] + LIBS_MB
+    return {"installed": installed, "gpu": bool(gpu), "models": models, "models_ready": all(m["downloaded"] for m in models),
+            "download_mb": need, "python_ok": base_python() is not None}
 
 
 def base_python() -> list[str] | None:
@@ -307,6 +362,12 @@ class EngineRunner:
     def _setup(self):
         p = self.p
         p.state, p.error, p.done, p.total = "running", None, 0, 4
+        if engine_ready():                       # engine installed: only the missing models
+            self._download_models()
+            p.state, p.phase, p.message = "idle", "", "AI models downloaded"
+            if has_taste():
+                self.request("analyze")
+            return
         base = base_python()
         if not base:
             raise RuntimeError("Python 3.10+ is needed to install the For You engine (python.org)")
@@ -323,15 +384,39 @@ class EngineRunner:
         self._pip(torch_args, f"Installing PyTorch ({'GPU' if gpu else 'CPU'}, large download)")
         p.set(done=2)
         self._pip(PACKAGES, "Installing AI libraries")
-        p.set(done=3, phase="Downloading AI models (~2 GB, once)")
-        self._run([str(engine_python()), str(analyzer_script()), "--home", str(data_dir()), "--prefetch"])
+        p.set(done=3)
+        self._download_models()
         (engine_dir() / "ready.json").write_text(json.dumps({"version": ENGINE_VERSION, "gpu": gpu, "at": time.time()}),
                                                 encoding="utf-8")
         p.set(done=4)
         p.state, p.phase, p.message = "idle", "", "For You engine installed"
         log.info("For You engine installed (gpu=%s)", gpu)
-        if taste_folders():
+        if has_taste():
             self.request("analyze")
+
+    def _download_models(self):
+        """Download the missing models (the engine loads them once), showing real progress in MB."""
+        p = self.p
+        missing = [(r, mb) for r, _, mb in MODELS if not model_downloaded(r)]
+        if not missing:
+            return
+        expected = sum(mb for _, mb in missing)
+        start = _hub_mb()
+        p.set(phase="Downloading AI models", done=0, total=expected, current=f"0 / {expected:,} MB")
+        stop = threading.Event()
+
+        def watch():
+            while not stop.wait(1.0):
+                got = int(min(expected, max(0.0, _hub_mb() - start)))
+                p.set(done=got, total=expected, current=f"{got:,} / {expected:,} MB")
+        threading.Thread(target=watch, daemon=True).start()
+        try:
+            self._run([str(engine_python()), str(analyzer_script()), "--home", str(data_dir()), "--prefetch"])
+        finally:
+            stop.set()
+        if not models_downloaded():
+            raise RuntimeError("some AI models could not be downloaded (check the internet connection)")
+        p.set(done=expected, total=expected, current="")
 
     def _run(self, cmd):
         log_path = data_dir() / "logs" / "engine.log"
@@ -351,10 +436,15 @@ class EngineRunner:
     # -- analysis / ranking
     def _run_engine(self, rank_only=False):
         p = self.p
+        if not has_taste():
+            return                                  # nothing to learn from yet
         if not engine_ready():
-            p.state, p.phase, p.message = "idle", "", "For You engine not installed"
+            p.state, p.phase, p.error = "needs-engine", "For You: AI engine not installed", None
+            p.message = "For You needs its AI engine (one-time download). Open For You or Settings to install it."
             return
-        if not taste_folders() and not settings().get("taste_use_favorites", True):
+        if not models_downloaded():
+            p.state, p.phase, p.error = "needs-models", "For You: AI models missing", None
+            p.message = "For You needs to download AI models. Open For You or Settings to download them."
             return
         ff, fp = media.ffmpeg(), media.ffprobe()
         if not ff or not fp:

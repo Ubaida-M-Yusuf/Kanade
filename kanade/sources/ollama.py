@@ -15,14 +15,15 @@ log = logging.getLogger("kanade.ollama")
 
 
 def _base() -> str:
-    return (settings().get("ollama_url") or "http://localhost:11434").rstrip("/")
+    # "localhost" first tries IPv6 on Windows and waits ~2 s per attempt when nothing listens: use the IPv4 address
+    return (settings().get("ollama_url") or "http://127.0.0.1:11434").rstrip("/").replace("//localhost", "//127.0.0.1")
 
 
 def available() -> bool:
     if not settings().get("ollama_enabled"):
         return False
     try:
-        r = requests.get(_base() + "/api/tags", timeout=2)
+        r = requests.get(_base() + "/api/tags", timeout=(0.5, 2))
         return r.ok
     except requests.RequestException:
         return False

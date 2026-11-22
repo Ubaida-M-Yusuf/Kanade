@@ -737,6 +737,7 @@ function setView(view, opts = {}) {
     S.fyMemo = { top: scroller.scrollTop, sig: fySig() };       // come back to the same place if nothing changed
     if (S.ratedSinceLearn) { S.ratedSinceLearn = 0; api.post("/api/foryou/learn").catch(() => {}); }
   }
+  if (view === "foryou" && !wasForYou && !S.fySetupAsked) maybeAskForYouSetup();
   if (view === "foryou" && !wasForYou) {
     if (S.pendingRec) { applyRecs(S.pendingRec); S.fyMemo = null; opts.scroll = 0; }    // new picks: start at the top
     else if (S.fyMemo && S.fyMemo.sig === fySig()) opts.scroll = S.fyMemo.top;
@@ -1714,10 +1715,12 @@ function closeModal() {
   for (const vid of m.querySelectorAll("video")) { vid.pause(); vid.removeAttribute("src"); vid.load(); }
   clearTimeout(m._hoverT);
   m.onclick = m.onmouseover = m.onmouseleave = null;
-  m.classList.remove("versions", "teach");
+  m.classList.remove("versions", "teach", "setupm");
+  S.modalLocked = false;
+  clearInterval(S.modalPoll);
   $("#modalWrap").classList.add("hidden"); m.innerHTML = "";
 }
-$("#modalWrap").addEventListener("mousedown", (e) => { if (e.target.id === "modalWrap") closeModal(); });
+$("#modalWrap").addEventListener("mousedown", (e) => { if (e.target.id === "modalWrap" && !S.modalLocked) closeModal(); });
 
 async function openEditor(ids, opts = {}) {
   const many = ids.length > 1;
@@ -1825,6 +1828,7 @@ async function renderSettings() {
   S.boot = b; S.settings = b.settings;
   const st = b.settings, c = b.counts, tools = b.tools;
   const ol = await api.get("/api/ollama").catch(() => ({ available: false, models: [] }));
+  const ei = await api.get("/api/engine/info").catch(() => null);
   const cat = b.catalog;
   if (S.view !== "settings") return;
   page.innerHTML = `
@@ -1850,8 +1854,10 @@ async function renderSettings() {
     <div class="tlist" id="t_list"></div>
     <div class="inline" style="margin-top:10px"><input id="t_new" placeholder="Paste a folder path, or use Browse… (add as many folders as you like)"><button class="btn" data-s="t-browse">${icon("folder")}Browse…</button><button class="btn" data-s="t-add">Add</button></div>
     <label class="check-row" style="margin-top:12px"><input type="checkbox" id="t_fav" ${st.taste_use_favorites ? "checked" : ""}> Count my favourites as likes too</label>
-    <div class="status-line" style="margin-top:12px"><span class="dotc ${b.taste && b.taste.engine_ready ? "" : "mid"}"></span>For You engine: ${b.taste && b.taste.engine_ready ? `installed · ${(b.taste.analysed || 0).toLocaleString()} library videos analysed` : "not installed (one-time download of about 4–5 GB: PyTorch + 2 AI models; uses your NVIDIA GPU if present)"}</div>
-    <div class="row-actions" style="margin-top:12px">${b.taste && b.taste.engine_ready ? "" : `<button class="btn primary" data-s="engine-setup">Install For You engine</button>`}
+    <h4 class="sub-h">AI engine and models</h4>
+    <div class="status-line"><span class="dotc ${ei && ei.installed ? "" : "mid"}"></span>AI engine (PyTorch${ei && ei.gpu ? ", NVIDIA graphics card" : ", CPU"}): ${ei && ei.installed ? `installed · ${((b.taste && b.taste.analysed) || 0).toLocaleString()} library videos analysed` : "not installed"}</div>
+    ${ei ? ei.models.map((mm) => `<div class="status-line"><span class="dotc ${mm.downloaded ? "" : "mid"}"></span><b>${esc(mm.repo.split("/")[1])}</b>&nbsp;· ${esc(mm.purpose)} · ${fmtMB(mm.size_mb)} · ${mm.downloaded ? "downloaded" : "not downloaded"}</div>`).join("") : ""}
+    <div class="row-actions" style="margin-top:12px">${ei && (!ei.installed || !ei.models_ready) ? `<button class="btn primary" data-s="engine-setup">${icon("spark")}${ei.installed ? "Download missing models" : "Install AI engine and models"} (${fmtMB(ei.download_mb)})</button>` : ""}
       <button class="btn ${b.taste && b.taste.engine_ready ? "primary" : ""}" data-s="t-save">${icon("check")}Save folders &amp; analyse</button>
       ${b.taste && b.taste.engine_ready ? `<button class="btn" data-s="engine-analyze">${icon("refresh")}Re-analyse now</button>` : ""}</div></div>
   <div class="panel"><h3>Playback</h3><p class="desc">Double-click or Enter plays a video. Leave the VLC path empty to use the Windows default player for the file type.</p>
@@ -1902,8 +1908,15 @@ async function renderSettings() {
       }
       if (a === "t-add") { const v = $("#t_new").value.trim(); if (v && !S.tasteDraft.includes(v)) { S.tasteDraft.push(v); renderTasteList(); } $("#t_new").value = ""; }
       if (a === "t-del") { S.tasteDraft.splice(Number(btn.dataset.i), 1); renderTasteList(); }
-      if (a === "t-save") { const nv = $("#t_new").value.trim(); if (nv && !S.tasteDraft.includes(nv)) S.tasteDraft.push(nv); await api.post("/api/taste", { folders: S.tasteDraft, use_favorites: $("#t_fav").checked }); toast("Saved · For You will update in the background"); renderSettings(); }
-      if (a === "engine-setup") { await api.post("/api/taste", { folders: S.tasteDraft, use_favorites: $("#t_fav").checked }); await api.post("/api/engine/setup"); toast("Installing the For You engine in the background (large download)…"); }
+      if (a === "t-save") {
+        const nv = $("#t_new").value.trim(); if (nv && !S.tasteDraft.includes(nv)) S.tasteDraft.push(nv);
+        await api.post("/api/taste", { folders: S.tasteDraft, use_favorites: $("#t_fav").checked });
+        S.settings.taste_folders = [...S.tasteDraft];
+        if (ei && (!ei.installed || !ei.models_ready)) openForYouSetup(ei);      // never a silent download or failure
+        else toast("Saved · For You will update in the background");
+        renderSettings();
+      }
+      if (a === "engine-setup") { if (S.tasteDraft.length) await api.post("/api/taste", { folders: S.tasteDraft, use_favorites: $("#t_fav").checked }); openForYouSetup(ei); }
       if (a === "engine-analyze") { await api.post("/api/engine/analyze"); toast("For You analysis started"); }
       if (a === "save") {
         const r = await api.post("/api/settings", {
@@ -1929,6 +1942,159 @@ function renderSetup() {
     const root = $("#setupRoot").value.trim(); if (!root) return;
     try { const r = await api.post("/api/settings", { archive_root: root }); S.settings = r.settings; toast("Scanning your archive…"); setView("all", { noHistory: true }); }
     catch (e) { toast(e.message, true); }
+  };
+}
+
+/* ------------------------------------------------------------------ set-up pop-ups */
+const fmtMB = (mb) => (mb >= 1000 ? `${(mb / 1000).toFixed(1)} GB` : `${Math.round(mb)} MB`);
+
+/** Live progress of the For You engine install / model download inside a pop-up. */
+function setupProgressHTML(j) {
+  const pct = j.total ? Math.min(100, (100 * j.done) / j.total) : 0;
+  return `<div class="sp-phase">${esc(j.phase || "Starting…")}</div>
+    <div class="bar ${j.total ? "" : "indet"}"><i style="width:${pct}%"></i></div>
+    <div class="sp-cur">${esc(j.current || j.message || "")}</div>`;
+}
+/** Poll the engine job while a pop-up shows its progress; done(ok, job) when it finishes. */
+function watchEngine(box, done) {
+  clearInterval(S.modalPoll);
+  let seenRunning = false, waits = 0;
+  const tick = async () => {
+    let st;
+    try { st = await api.get("/api/status"); } catch (e) { return; }
+    const j = st.recs || {};
+    if (!box.isConnected) { clearInterval(S.modalPoll); return; }
+    const installing = j.state === "running" && !/^For You:/.test(j.phase || "");   // analysis phases start "For You:"
+    if (installing) { seenRunning = true; box.innerHTML = setupProgressHTML(j); return; }
+    if (!seenRunning && ++waits < 20 && j.state !== "error") return;     // queued, not started yet
+    clearInterval(S.modalPoll);
+    done(j.state !== "error", j);
+  };
+  S.modalPoll = setInterval(tick, 1000);
+  tick();
+}
+function engineLine(info) {
+  if (!info) return "";
+  if (info.installed && info.models_ready) return `<div class="sp-ok">${icon("check")}AI engine and models are installed${info.gpu ? " (uses your NVIDIA graphics card)" : ""}.</div>`;
+  const what = info.installed ? "the missing AI models" : `the AI engine (PyTorch${info.gpu ? " with NVIDIA graphics-card support" : ""}) and ${info.models.length} AI models`;
+  return `<div class="sp-need">For You runs on your computer and needs ${what}: a one-time download of about <b>${fmtMB(info.download_mb)}</b>. Nothing is sent anywhere; after this it works offline.</div>`;
+}
+
+/** First run: choose the library, then (optionally) download the AI engine for For You. */
+function openWelcome() {
+  const m = $("#modal");
+  S.modalLocked = true;
+  m.classList.add("setupm");
+  m.innerHTML = `<div class="modal-body sp">
+      <div class="sp-logo">${$(".brand .logo").innerHTML}</div>
+      <h2>Welcome to Kanade</h2>
+      <p>Choose the folder that holds your anime openings and endings (for example an AnimeThemes archive organised by year, like <code>2015\\Spring\\…</code>). Subfolders are included. Kanade only reads it and never changes your files.</p>
+      <div class="inline"><input id="wRoot" placeholder="D:\\AnimeThemes" value="${esc(S.settings.archive_root || "")}"><button class="btn" id="wPick">${icon("folder")}Browse…</button></div>
+      ${S.boot && !S.boot.tools.ok ? `<p class="sp-warn">${esc(S.boot.tools.help)}</p>` : ""}
+      <div class="sp-actions"><button class="btn primary" id="wGo">Continue</button></div></div>`;
+  $("#modalWrap").classList.remove("hidden");
+  $("#wPick").onclick = async () => { try { const r = await api.post("/api/pick-folder"); if (r.path) $("#wRoot").value = r.path; } catch (e) { toast(e.message, true); } };
+  $("#wGo").onclick = async () => {
+    const root = $("#wRoot").value.trim();
+    if (!root) return toast("Choose your library folder first", true);
+    try { const r = await api.post("/api/settings", { archive_root: root }); S.settings = r.settings; }
+    catch (e) { return toast(e.message, true); }
+    toast("Scanning your library…");
+    loadData(false);
+    welcomeAI();
+  };
+}
+async function welcomeAI() {
+  const m = $("#modal");
+  S.modalLocked = false;
+  const info = await api.get("/api/engine/info").catch(() => null);
+  if (info && info.installed && info.models_ready) return closeModal();
+  m.innerHTML = `<div class="modal-body sp">
+      <div class="sp-icon">${icon("spark")}</div>
+      <h2>Recommendations (optional)</h2>
+      <p><b>For You</b> learns your taste from folders of openings you love and finds the most similar ones in your library, by sound, look and genre. You can set it up now or any time later in For You or Settings.</p>
+      ${engineLine(info)}
+      ${info && !info.python_ok ? `<p class="sp-warn">The AI engine needs Python 3.10 or newer (python.org) to install.</p>` : ""}
+      <div class="sp-progress hidden" id="wProg"></div>
+      <div class="sp-actions"><button class="btn" id="wLater">Not now</button><button class="btn primary" id="wDl" ${info && !info.python_ok ? "disabled" : ""}>${icon("spark")}Download (${fmtMB(info ? info.download_mb : 0)})</button></div></div>`;
+  $("#wLater").onclick = () => { closeModal(); toast("You can set up For You any time from the For You page"); };
+  $("#wDl").onclick = async () => {
+    try { await api.post("/api/engine/setup"); } catch (e) { return toast(e.message, true); }
+    const prog = $("#wProg"); prog.classList.remove("hidden"); prog.innerHTML = setupProgressHTML({ phase: "Starting…" });
+    $("#wDl").disabled = true; $("#wLater").textContent = "Continue in the background";
+    watchEngine(prog, (ok, j) => {
+      if (!$("#wProg")) return;
+      prog.innerHTML = ok ? `<div class="sp-ok">${icon("check")}Done. Next: tell For You what you like.</div>` : `<div class="sp-warn">Download failed: ${esc(j.error || j.message || "unknown error")}</div>`;
+      $("#wLater").textContent = "Close";
+      if (ok) { $("#wDl").outerHTML = `<button class="btn primary" id="wFy">${icon("spark")}Set up For You</button>`; $("#wFy").onclick = () => { closeModal(); setView("foryou"); openForYouSetup(); }; }
+      else { $("#wDl").disabled = false; $("#wDl").innerHTML = `${icon("refresh")}Try again`; }
+    });
+  };
+}
+
+/** Is For You missing something (liked songs or the AI engine)? Asks once per session when For You opens. */
+async function maybeAskForYouSetup() {
+  S.fySetupAsked = true;
+  const info = await api.get("/api/engine/info").catch(() => null);
+  const folders = (S.recStatus && S.recStatus.folders) || S.settings.taste_folders || [];
+  const hasTaste = folders.length || S.videos.some((v) => v.fav || v.rating);
+  if (!hasTaste || (info && (!info.installed || !info.models_ready))) openForYouSetup(info);
+}
+
+/** For You set-up: liked folders, favourites, and the AI engine download, with live progress. */
+async function openForYouSetup(info = null) {
+  info = info || await api.get("/api/engine/info").catch(() => null);
+  const folders = [...((S.recStatus && S.recStatus.folders) || S.settings.taste_folders || [])];
+  const useFav = S.settings.taste_use_favorites !== false;
+  const m = $("#modal");
+  const ready = info && info.installed && info.models_ready;
+  m.classList.add("setupm");
+  const draw = () => {
+    m.innerHTML = `<div class="modal-head"><div><h3>${icon("spark")} Set up For You</h3><div class="sub">Kanade learns your taste and ranks your library by it</div></div>
+        <button class="icon-btn" data-sx="close" title="Close (Esc)">${icon("x")}</button></div>
+      <div class="modal-body sp">
+        <h4>1 · Openings and endings you love</h4>
+        <p>Add folders of videos you love (any drive, any format, subfolders included; Kanade only reads them). They can be outside your library: Kanade finds the same songs in your library by name and sound.</p>
+        <div class="tlist">${folders.length ? folders.map((f, i) => `<div class="titem">${icon("folder")}<span title="${esc(f)}">${esc(f)}</span><button class="icon-btn" data-sx="del" data-i="${i}" title="Remove">${icon("x")}</button></div>`).join("") : `<div class="tempty">No folders yet.</div>`}</div>
+        <div class="inline" style="margin-top:10px"><input id="fyNew" placeholder="Paste a folder path, or use Browse…"><button class="btn" data-sx="browse">${icon("folder")}Browse…</button><button class="btn" data-sx="add">Add</button></div>
+        <label class="check-row" style="margin-top:12px"><input type="checkbox" id="fyFav" ${useFav ? "checked" : ""}> Count my favourites and 👍 likes as liked songs too</label>
+        <h4 style="margin-top:20px">2 · AI models</h4>
+        ${engineLine(info)}
+        <div class="sp-progress hidden" id="fyProg"></div>
+        <div class="sp-actions">
+          <button class="btn" data-sx="close">Not now</button>
+          <button class="btn primary" data-sx="go">${ready ? `${icon("check")}Save &amp; start` : `${icon("spark")}Download (${fmtMB(info ? info.download_mb : 0)}) &amp; start`}</button></div>
+      </div>`;
+  };
+  draw();
+  $("#modalWrap").classList.remove("hidden");
+  m.onclick = async (e) => {
+    const b = e.target.closest("[data-sx]"); if (!b) return;
+    const a = b.dataset.sx;
+    if (a === "close") return closeModal();
+    if (a === "del") { folders.splice(Number(b.dataset.i), 1); return draw(); }
+    if (a === "browse") { try { const r = await api.post("/api/pick-folder"); if (r.path && !folders.includes(r.path)) { folders.push(r.path); draw(); } } catch (err) { toast(err.message, true); } return; }
+    if (a === "add") { const v = $("#fyNew").value.trim(); if (v && !folders.includes(v)) { folders.push(v); draw(); } return; }
+    if (a === "go") {
+      const fav = $("#fyFav").checked;
+      if (!folders.length && !(fav && S.videos.some((v) => v.fav || v.rating === 1))) return toast("Add at least one folder (or favourite / like a few videos first)", true);
+      try {
+        const r = await api.post("/api/taste", { folders, use_favorites: fav });
+        S.settings.taste_folders = folders; S.settings.taste_use_favorites = fav;
+        if (r.status) S.recStatus = r.status;
+        if (!ready) await api.post("/api/engine/setup");
+      } catch (err) { return toast(err.message, true); }
+      if (ready) { closeModal(); toast("Saved · For You is analysing in the background"); return; }
+      const prog = $("#fyProg"); prog.classList.remove("hidden"); prog.innerHTML = setupProgressHTML({ phase: "Starting…" });
+      b.disabled = true;
+      m.querySelector('.sp-actions [data-sx="close"]').textContent = "Continue in the background";
+      watchEngine(prog, (ok, j) => {
+        prog.innerHTML = ok ? `<div class="sp-ok">${icon("check")}Installed. For You is now analysing your library; results appear as they're ready.</div>`
+                            : `<div class="sp-warn">Download failed: ${esc(j.error || j.message || "unknown error")}</div>`;
+        const c = m.querySelector('.sp-actions [data-sx="close"]'); if (c) c.textContent = "Close";
+        b.disabled = ok; if (!ok) b.innerHTML = `${icon("refresh")}Try again`;
+      });
+    }
   };
 }
 
@@ -2068,7 +2234,7 @@ function renderTasteList() {
 
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-fy]"); if (!b) return;
-  if (b.dataset.fy === "settings") setView("settings");
+  if (b.dataset.fy === "settings") openForYouSetup();
   if (b.dataset.fy === "analyze") api.post("/api/engine/analyze").then(() => toast("For You analysis started")).catch((err) => toast(err.message, true));
 });
 
@@ -2236,7 +2402,7 @@ $("#nav").addEventListener("click", (e) => {
 /* ------------------------------------------------------------------ keyboard */
 document.addEventListener("keydown", (e) => {
   const inField = e.target.closest("input, textarea, select");
-  if (!$("#modalWrap").classList.contains("hidden")) { if (e.key === "Escape") closeModal(); return; }
+  if (!$("#modalWrap").classList.contains("hidden")) { if (e.key === "Escape" && !S.modalLocked) closeModal(); return; }
   if (e.key === "/" && !inField) { e.preventDefault(); $("#q").focus(); $("#q").select(); return; }
   if (inField) return;
   if (e.key === "Escape") { hideCtx(); if (S.sel.size > 1) { S.sel = new Set(S.focus != null ? [S.focus] : []); refreshSelectionClasses(); } else if ($("#details").classList.contains("open")) closeDetails(); else if (S.view === "anime") goBack(); return; }
@@ -2275,7 +2441,8 @@ document.addEventListener("keydown", (e) => {
   updateCounts();
   if (!S.boot.tools.ok) toast(S.boot.tools.help, true);
   if (!S.settings.archive_root || !S.boot.root_exists) {
-    S.view = "setup"; render(false);
+    setView("all", { noHistory: true });
+    openWelcome();
   } else {
     setView("all", { noHistory: true });
     await loadData(false);

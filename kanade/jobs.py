@@ -82,8 +82,8 @@ class JobManager:
         from . import recommend
         if what == "setup":
             self.engine.request("setup")
-        elif recommend.engine_ready() and (recommend.taste_folders() or settings().get("taste_use_favorites", True)):
-            self.engine.request(what)
+        elif recommend.taste_folders() or settings().get("taste_use_favorites", True):
+            self.engine.request(what)          # without the engine / models it reports what is missing, never downloads
 
     LEARN_AFTER = 5            # new likes/dislikes learnt together...
     LEARN_IDLE_S = 30.0        # ...or after this long without another one
