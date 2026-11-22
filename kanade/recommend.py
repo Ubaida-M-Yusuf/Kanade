@@ -21,7 +21,9 @@ from .config import data_dir, resource_dir, settings
 
 log = logging.getLogger("kanade.recommend")
 
-NO_WINDOW = (0x08000000 | 0x00004000) if sys.platform == "win32" else 0   # no console, below-normal priority
+from .osutil import BACKGROUND_FLAGS as NO_WINDOW            # no console, below-normal priority (Windows)
+from .osutil import CREATE_NO_WINDOW
+from .osutil import background as _bg                         # below-normal priority elsewhere (nice)
 ENGINE_VERSION = 2
 PACKAGES = ["transformers>=4.50,<5", "numpy", "pillow", "safetensors", "huggingface_hub", "sentencepiece", "protobuf",
             "nnAudio"]                                  # nnAudio: needed by the MERT music model
@@ -133,11 +135,11 @@ def base_python() -> list[str] | None:
         for v in ("-3.12", "-3.11", "-3.13", "-3"):
             try:
                 if subprocess.run(["py", v, "-c", "import sys; assert sys.version_info >= (3, 10)"],
-                                  capture_output=True, creationflags=0x08000000, timeout=30).returncode == 0:
+                                  capture_output=True, creationflags=CREATE_NO_WINDOW, timeout=30).returncode == 0:
                     return ["py", v]
             except Exception:
                 continue
-    for name in ("python", "python3"):
+    for name in ("python3", "python"):
         p = shutil.which(name)
         if p and "WindowsApps" not in p:
             return [p]
@@ -149,7 +151,7 @@ def has_nvidia_gpu() -> bool:
     if not exe:
         return False
     try:
-        return subprocess.run([exe, "-L"], capture_output=True, timeout=15, creationflags=0x08000000).returncode == 0
+        return subprocess.run([exe, "-L"], capture_output=True, timeout=15, creationflags=CREATE_NO_WINDOW).returncode == 0
     except Exception:
         return False
 
@@ -343,7 +345,7 @@ class EngineRunner:
     def _pip(self, args, phase):
         self.p.set(phase=phase, current=" ".join(a for a in args if not a.startswith("-"))[:80])
         cmd = [str(engine_python()), "-m", "pip", "install", "--disable-pip-version-check", "--no-input", *args]
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=NO_WINDOW,
+        proc = subprocess.Popen(_bg(cmd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=NO_WINDOW,
                                 env=engine_env(), text=True, encoding="utf-8", errors="replace")
         self.proc = proc
         tail = []
@@ -374,7 +376,7 @@ class EngineRunner:
         if not engine_python().exists():
             p.set(phase="Installing For You engine", done=0, current="creating environment")
             r = subprocess.run([*base, "-m", "venv", str(engine_dir() / "venv")], capture_output=True, text=True,
-                               creationflags=0x08000000)
+                               creationflags=CREATE_NO_WINDOW)
             if r.returncode != 0:
                 raise RuntimeError("could not create the engine environment: " + r.stderr[-300:])
         p.set(done=1)
@@ -423,7 +425,7 @@ class EngineRunner:
         with open(log_path, "a", encoding="utf-8") as lf:
             lf.write(f"\n--- {time.ctime()} {' '.join(cmd[1:])}\n")
             lf.flush()
-            self.proc = subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT, creationflags=NO_WINDOW,
+            self.proc = subprocess.Popen(_bg(cmd), stdout=lf, stderr=subprocess.STDOUT, creationflags=NO_WINDOW,
                                          env=engine_env())
             while self.proc.poll() is None:
                 if self._stop.is_set():

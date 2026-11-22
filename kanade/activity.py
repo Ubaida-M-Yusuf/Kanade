@@ -73,12 +73,6 @@ def yield_to_user(stop_event: threading.Event | None = None, max_wait: float = 1
 
 
 def lower_thread_priority():
-    """Run the calling thread below normal priority (Windows); no-op elsewhere."""
-    if sys.platform != "win32":
-        return
-    try:
-        import ctypes
-        k = ctypes.windll.kernel32
-        k.SetThreadPriority(k.GetCurrentThread(), -1)  # THREAD_PRIORITY_BELOW_NORMAL
-    except Exception:
-        pass
+    """Run the calling thread below normal priority."""
+    from .osutil import lower_thread_priority as lower
+    lower()

@@ -15,12 +15,14 @@ _lock = threading.RLock()
 
 
 def data_dir() -> Path:
-    """%LOCALAPPDATA%\\Kanade (override with the KANADE_HOME environment variable)."""
+    """%LOCALAPPDATA%\\Kanade on Windows, ~/.local/share/Kanade on Linux, ~/Library/Application Support/Kanade on
+    macOS (override with the KANADE_HOME environment variable)."""
     override = os.environ.get("KANADE_HOME")
     if override:
         base = Path(override)
     else:
-        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / APP_NAME
+        from .osutil import user_data_root
+        base = user_data_root() / APP_NAME
     base.mkdir(parents=True, exist_ok=True)
     return base
 

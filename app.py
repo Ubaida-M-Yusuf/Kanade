@@ -1,4 +1,5 @@
-"""Kanade desktop app entry point: starts the local server and opens a native WebView2 window.
+"""Kanade desktop app entry point: starts the local server and opens a native window (WebView2 on Windows,
+WebKit on macOS, Qt or GTK WebKit on Linux).
 
     python app.py                     normal start
     python app.py --browser           serve only and open in the default browser (debugging)
@@ -86,27 +87,23 @@ def show_window(url: str, debug: bool = False, pick_hook=True):
     if pick_hook:
         def pick(kind="folder"):
             if kind == "file":
-                res = window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=False,
-                                                file_types=("Programs (*.exe)", "All files (*.*)"))
+                types = ("Programs (*.exe)", "All files (*.*)") if sys.platform == "win32" else ("All files (*)",)
+                res = window.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=False, file_types=types)
             else:
                 res = window.create_file_dialog(webview.FOLDER_DIALOG)
             if not res:
                 return None
             return res[0] if isinstance(res, (list, tuple)) else res
         server.pick_folder_hook = pick
-    webview.start(gui="edgechromium", private_mode=False,
+    # Windows: Edge WebView2. Elsewhere pywebview picks what is installed (Qt WebEngine or GTK WebKit on Linux,
+    # WebKit on macOS)
+    webview.start(gui="edgechromium" if sys.platform == "win32" else None, private_mode=False,
                   storage_path=str(config.data_dir() / "webview"), debug=debug)
 
 
 def message_box(text: str):
-    if sys.platform == "win32":
-        try:
-            import ctypes
-            ctypes.windll.user32.MessageBoxW(None, text, APP_NAME, 0x40)
-            return
-        except Exception:
-            pass
-    print(text)
+    from kanade.osutil import message_box as box
+    box(APP_NAME, text)
 
 
 def main():
@@ -142,7 +139,11 @@ def main():
             else:
                 show_window(url, args.debug, pick_hook=False)
             return
-        message_box("Kanade is already running (it may be finishing a background scan).")
+        msg = "Kanade is already running (it may be finishing a background scan)."
+        if args.headless:
+            print(msg, flush=True)               # scripted / background start: never wait on a dialog
+        else:
+            message_box(msg)
         return
 
     log.info("starting %s, data in %s", APP_NAME, config.data_dir())

@@ -65,11 +65,12 @@ anywhere.
 
 ## Requirements
 
-* Windows 10 or 11 (64-bit)
-* [VLC](https://www.videolan.org/) for playback
+* **Windows 10 or 11** (64-bit), or **Linux** (64-bit; checked on Ubuntu). macOS should work from source but is untested.
+* [VLC](https://www.videolan.org/) for playback (optional on Linux: without it the system's default player is used)
 * [FFmpeg](https://ffmpeg.org/) for thumbnails, durations and analysis (see below)
-* Microsoft Edge WebView2 runtime (part of Windows 11)
-* To run from source or build: Python 3.12
+* Windows: the Microsoft Edge WebView2 runtime (part of Windows 11). Linux: the window uses Qt WebEngine, which
+  `run.sh` installs with pip (no system packages needed)
+* To run from source or build: Python 3.10 or newer (3.12 recommended)
 * For You (optional): about 8 GB of free disk space for the analysis engine and its AI models; an NVIDIA
   graphics card makes the analysis much faster but isn't required
 
@@ -88,13 +89,23 @@ anywhere.
    ever downloaded without asking.
 
 ### Option B: run from source
-Requirements: Windows 10/11, Python 3.12, FFmpeg, and the Microsoft Edge WebView2 runtime (included with Windows 11).
+Requirements: Python 3.10+ and FFmpeg (plus the WebView2 runtime on Windows 10).
+
+Windows:
 
 ```bat
 run.bat
 ```
 
-The first run creates `.venv` and installs `requirements.txt`. Useful flags:
+Linux (or macOS):
+
+```sh
+sudo apt install python3-venv ffmpeg vlc     # Debian / Ubuntu; use dnf, pacman or brew elsewhere
+./run.sh
+```
+
+The first run creates `.venv` and installs `requirements.txt`. If no window can open (for example on a server),
+use `./run.sh --browser` to use Kanade in your web browser instead. Useful flags:
 
 | Flag | Effect |
 |---|---|
@@ -268,7 +279,8 @@ Kanade runs an incremental scan at every start (or via *Settings ▸ Rescan libr
 
 ## Data, cache and settings
 
-Everything lives in **`%LOCALAPPDATA%\Kanade\`**:
+Everything lives in **`%LOCALAPPDATA%\Kanade\`** on Windows, **`~/.local/share/Kanade/`** on Linux (or
+`$XDG_DATA_HOME/Kanade`) and **`~/Library/Application Support/Kanade/`** on macOS:
 
 | Path | Contents |
 |---|---|
@@ -301,7 +313,7 @@ thumbnails, or `library.db` to rebuild the library from scratch (this loses favo
 
 ---
 
-## Building the .exe
+## Building the app
 
 ```bat
 build.bat
@@ -311,6 +323,11 @@ This produces `dist\Kanade\Kanade.exe` (a one-folder PyInstaller build: it start
 to it). The app itself is about 45 MB. A "full" FFmpeg build adds about 430 MB; use `build.bat --no-ffmpeg` to leave
 FFmpeg out and use the one on your PATH instead. Copy the whole `dist\Kanade` folder anywhere; no Python install is needed. The WebView2 runtime is part of
 Windows 11.
+
+Linux / macOS: `./build.sh` produces `dist/Kanade/Kanade`. FFmpeg isn't bundled there; install it with the
+package manager. The For You engine sets up its own Python environment the first time it is installed, so it
+needs `python3` with the `venv` module (Debian / Ubuntu: `sudo apt install python3-venv`). With an NVIDIA graphics
+card and its driver installed, the engine uses it automatically, as on Windows.
 
 ---
 

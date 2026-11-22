@@ -8,7 +8,7 @@ import subprocess
 import threading
 import time
 
-from . import catalog, db, matcher, search
+from . import catalog, db, matcher, osutil, search
 from .config import settings
 from .parser import parse_filename
 from .sources import anilist, animethemes as at, jikan
@@ -268,17 +268,18 @@ def play(video_id: int):
     # no extra disk check here: VLC opens the file right away (a spinning-up disk would be hit twice)
     path = _video_path(video_id, check=False)
     vlc = settings().get("vlc_path")
+    if not (vlc and os.path.isfile(vlc)) and not osutil.IS_WINDOWS:
+        vlc = osutil.find_vlc()                  # Linux / macOS: VLC if installed, else the default player
     if vlc and os.path.isfile(vlc):
-        subprocess.Popen([vlc, path], close_fds=True,
-                         creationflags=0x00000008 | 0x00000200)  # DETACHED_PROCESS | NEW_PROCESS_GROUP
+        osutil.launch_detached([vlc, path])
     else:
-        os.startfile(path)  # Windows default association (VLC on this machine)
+        osutil.open_path(path)                   # the system's default player
     log.info("play %s", path)
 
 
 def reveal(video_id: int):
     path = _video_path(video_id)
-    subprocess.Popen(["explorer.exe", "/select,", os.path.normpath(path)])
+    osutil.reveal_file(path)
 
 
 # ------------------------------------------------------------- corrections

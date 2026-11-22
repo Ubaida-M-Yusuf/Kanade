@@ -20,8 +20,10 @@ from .config import data_dir, exe_dir, resource_dir, settings
 
 log = logging.getLogger("kanade.media")
 
-# CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS: background FFmpeg never competes with the UI
-NO_WINDOW = (0x08000000 | 0x00004000) if sys.platform == "win32" else 0
+# background FFmpeg never competes with the UI: no console window and below-normal priority (Windows flags;
+# elsewhere commands run through `nice`, see osutil.background)
+from .osutil import BACKGROUND_FLAGS as NO_WINDOW
+from .osutil import background as _bg
 
 
 def _find_tool(name: str) -> str | None:
@@ -48,10 +50,13 @@ def tools_status() -> dict:
     return {
         "ok": bool(f and p), "ffmpeg": f, "ffprobe": p,
         "help": None if (f and p) else (
-            "FFmpeg was not found, so thumbnails and durations can't be generated. Install it with "
-            "'winget install Gyan.FFmpeg' (then restart Kanade), or download it from https://www.gyan.dev/ffmpeg/builds/ "
-            "and put ffmpeg.exe and ffprobe.exe in a folder named 'ffmpeg' next to Kanade.exe, "
-            "or set their paths in Settings."),
+            ("FFmpeg was not found, so thumbnails and durations can't be generated. Install it with "
+             "'winget install Gyan.FFmpeg' (then restart Kanade), or download it from https://www.gyan.dev/ffmpeg/builds/ "
+             "and put ffmpeg.exe and ffprobe.exe in a folder named 'ffmpeg' next to Kanade.exe, "
+             "or set their paths in Settings.") if sys.platform == "win32" else
+            ("FFmpeg was not found, so thumbnails and durations can't be generated. Install it with your package "
+             "manager (for example 'sudo apt install ffmpeg', 'sudo dnf install ffmpeg' or 'brew install ffmpeg'), "
+             "then restart Kanade.")),
     }
 
 
@@ -73,8 +78,8 @@ def probe(path: str) -> dict | None:
         return None
     try:
         out = subprocess.run(
-            [exe, "-v", "error", "-select_streams", "v:0", "-show_entries",
-             "format=duration:stream=width,height,codec_name", "-of", "json", path],
+            _bg([exe, "-v", "error", "-select_streams", "v:0", "-show_entries",
+                 "format=duration:stream=width,height,codec_name", "-of", "json", path]),
             capture_output=True, timeout=60, creationflags=NO_WINDOW)
         if out.returncode != 0:
             log.warning("ffprobe failed for %s: %s", path, out.stderr.decode(errors="ignore")[:300])
@@ -95,9 +100,9 @@ def _grab(path: str, t: float, width: int) -> Image.Image | None:
         return None
     try:
         out = subprocess.run(
-            [exe, "-hide_banner", "-loglevel", "error", "-threads", "1", "-skip_frame", "nokey",
-             "-ss", f"{t:.2f}", "-i", path, "-frames:v", "1",
-             "-vf", f"scale={width}:-2:flags=lanczos", "-f", "image2pipe", "-vcodec", "ppm", "-"],
+            _bg([exe, "-hide_banner", "-loglevel", "error", "-threads", "1", "-skip_frame", "nokey",
+                 "-ss", f"{t:.2f}", "-i", path, "-frames:v", "1",
+                 "-vf", f"scale={width}:-2:flags=lanczos", "-f", "image2pipe", "-vcodec", "ppm", "-"]),
             capture_output=True, timeout=60, creationflags=NO_WINDOW)
         if out.returncode != 0 or not out.stdout:
             return None
@@ -183,7 +188,7 @@ def _grab_many(path: str, times: list[float], width: int, tag: str) -> list[Imag
         cmd += ["-map", f"{i}:v:0", "-frames:v", "1", "-vf", f"scale={width}:-2:flags=lanczos", "-y", str(d / f"{i}.ppm")]
     frames = []
     try:
-        subprocess.run(cmd, capture_output=True, timeout=120, creationflags=NO_WINDOW)
+        subprocess.run(_bg(cmd), capture_output=True, timeout=120, creationflags=NO_WINDOW)
         for i in range(len(times)):
             f = d / f"{i}.ppm"
             if f.is_file() and f.stat().st_size > 0:

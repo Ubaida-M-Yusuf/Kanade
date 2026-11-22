@@ -275,7 +275,8 @@ def api_post(path: str, body: dict):
         webbrowser.open(url)
         return {"ok": True}
     if path == "/api/open-data-dir":
-        os.startfile(str(data_dir()))
+        from . import osutil
+        osutil.open_path(str(data_dir()))
         return {"ok": True}
     raise ApiError("unknown endpoint", 404)
 

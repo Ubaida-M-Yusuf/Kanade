@@ -1860,7 +1860,7 @@ async function renderSettings() {
     <div class="row-actions" style="margin-top:12px">${ei && (!ei.installed || !ei.models_ready) ? `<button class="btn primary" data-s="engine-setup">${icon("spark")}${ei.installed ? "Download missing models" : "Install AI engine and models"} (${fmtMB(ei.download_mb)})</button>` : ""}
       <button class="btn ${b.taste && b.taste.engine_ready ? "primary" : ""}" data-s="t-save">${icon("check")}Save folders &amp; analyse</button>
       ${b.taste && b.taste.engine_ready ? `<button class="btn" data-s="engine-analyze">${icon("refresh")}Re-analyse now</button>` : ""}</div></div>
-  <div class="panel"><h3>Playback</h3><p class="desc">Double-click or Enter plays a video. Leave the VLC path empty to use the Windows default player for the file type.</p>
+  <div class="panel"><h3>Playback</h3><p class="desc">Double-click or Enter plays a video. Leave the VLC path empty to use VLC if it is installed in its usual place (Linux, macOS) or the system's default player for the file type.</p>
     <div class="form-grid">
       <div class="field"><label>VLC path (optional)</label><div class="inline"><input id="s_vlc" value="${esc(st.vlc_path)}" placeholder="C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"><button class="btn" data-s="pick-vlc">Browse…</button></div></div>
       <label class="check-row"><input type="checkbox" id="s_hover" ${st.hover_preview ? "checked" : ""}> Muted video preview when hovering a card</label>

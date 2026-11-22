@@ -170,7 +170,8 @@ def limit_own_memory(max_bytes=PROCESS_MEMORY_LIMIT):
     """Put this process (and its children) in a Windows job object with a per-process memory cap.
 
     If anything ever goes over the cap, Windows refuses the allocation / ends just this process instead of
-    letting the whole system run out of memory.
+    letting the whole system run out of memory. (Linux and macOS: no cap; an address-space limit would break
+    the GPU driver, which reserves very large virtual ranges. The Linux kernel's OOM killer is the safety net.)
     """
     if sys.platform != "win32":
         return None
@@ -206,32 +207,48 @@ def limit_own_memory(max_bytes=PROCESS_MEMORY_LIMIT):
 
 
 def _open_process(pid):
-    """A handle to the app's process, to notice when it is gone (works even if the pid is reused)."""
-    if not pid or sys.platform != "win32":
+    """A handle to the app's process, to notice when it is gone (Windows: works even if the pid is reused;
+    elsewhere the app is our parent, so its exit shows as a changed parent process id)."""
+    if not pid:
         return None
+    if sys.platform != "win32":
+        return ("pid", int(pid))
     import ctypes
     h = ctypes.windll.kernel32.OpenProcess(0x00100000, False, int(pid))      # SYNCHRONIZE
     return h or None
 
 
 def _process_exited(handle) -> bool:
+    if isinstance(handle, tuple):                                              # POSIX
+        pid = handle[1]
+        if os.getppid() != pid:                                                # re-parented: the app is gone
+            return True
+        try:
+            os.kill(pid, 0)
+            return False
+        except ProcessLookupError:
+            return True
+        except OSError:
+            return False
     import ctypes
     return ctypes.windll.kernel32.WaitForSingleObject(handle, 0) == 0          # WAIT_OBJECT_0: it has exited
 
 
 def single_engine_lock(home: Path, wait_s=45.0):
     """Only one engine at a time (e.g. an old one still saving while a new app starts). Returns the lock file."""
-    if sys.platform != "win32":
-        return True
-    import msvcrt
     d = home / "engine"
     d.mkdir(parents=True, exist_ok=True)
     f = open(d / "engine.lock", "a+b")
     t0 = time.time()
     while True:
         try:
-            f.seek(0)
-            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+            if sys.platform == "win32":
+                import msvcrt
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             return f
         except OSError:
             if time.time() - t0 > wait_s:
