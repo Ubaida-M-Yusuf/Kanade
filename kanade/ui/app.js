@@ -554,6 +554,8 @@ function sortItems(items) {
   else if (s === "added") arr.sort((a, b) => (b.added || 0) - (a.added || 0) || byTitle(a, b));
   else if (s === "number") arr.sort((a, b) => cmpTheme(a, b) || byTitle(a, b));
   else if (s === "fav") arr.sort((a, b) => (b.fav_at || 0) - (a.fav_at || 0) || byTitle(a, b));
+  else if (s === "liked") { const at = new Map(); const get = (v) => { if (!at.has(v.id)) at.set(v.id, likedAt(v)); return at.get(v.id); };
+                            arr.sort((a, b) => get(b) - get(a) || byTitle(a, b)); }
   else arr.sort(byTitle);
   return arr;
 }
@@ -777,8 +779,8 @@ function setView(view, opts = {}) {
   S.view = view;
   if (opts.seriesId !== undefined) S.seriesId = opts.seriesId;
   // For You sorts by "Best match" by default; other views go back to the normal default
-  if (view === "foryou" && !wasForYou) { S.sortBeforeForYou = S.sort; setSort("match"); }
-  else if (view !== "foryou" && wasForYou) { setSort(S.sort === "match" ? (S.sortBeforeForYou && S.sortBeforeForYou !== "match" ? S.sortBeforeForYou : "title") : S.sort); }
+  if (view === "foryou" && !wasForYou) { S.sortBeforeForYou = S.sort; setSort("match"); setSort("liked"); setSort(S.fyTab === "liked" ? "liked" : "match"); }
+  else if (view !== "foryou" && wasForYou) { setSort(S.sort === "match" || S.sort === "liked" ? (S.sortBeforeForYou && !["match", "liked"].includes(S.sortBeforeForYou) ? S.sortBeforeForYou : "title") : S.sort); }
   S.sel.clear(); S.anchor = null;
   for (const a of $$("#nav a")) a.classList.toggle("active", a.dataset.view === (view === "anime" ? "series" : view));
   render(false);
@@ -945,7 +947,10 @@ function renderVideoGrid() {
         // each tab keeps its own scroll position while its list hasn't changed (new picks reset it)
         S.fyTabScroll = S.fyTabScroll || {};
         S.fyTabScroll[S.fyTab] = { top: scroller.scrollTop, sig: fySig() };
+        const was = S.fyTab;
         S.fyTab = t.dataset.fytab; S.fyMemo = null;
+        if (S.fyTab === "liked" && S.sort === "match") setSort("liked");
+        else if (was === "liked" && S.sort === "liked") setSort("match");
         const m = S.fyTabScroll[S.fyTab];
         render(false);
         if (m && m.sig === fySig()) { scroller.scrollTop = m.top; paint(); }
@@ -2370,7 +2375,7 @@ async function loadRecs() {
 function applyRecs(d) {
   const m = new Map();
   const nums = (x) => (x ? x.split(",").map(Number) : null);
-  for (const [id, a, mix, wa, wv, ga, gm, lf] of d.rows) m.set(id, { a, m: mix, wa, wv, ga: nums(ga), gm: nums(gm), lf: !!lf });
+  for (const [id, a, mix, wa, wv, ga, gm, lf] of d.rows) m.set(id, { a, m: mix, wa, wv, ga: nums(ga), gm: nums(gm), lf: !!lf, la: lf || 0 });
   S.rec = m;
   S.recRankAt = d.rank_at;
   S.pendingRec = null;
@@ -2477,8 +2482,20 @@ const runSearch = debounce(async () => {
   } catch (e) { toast(e.message, true); }
 }, 110);
 
+/** When a song was liked: the newest of its 👍 like, favourite, or the date of the file in the liked folders. */
+function likedAt(v) {
+  let t = 0;
+  for (const x of songVideos(v)) {
+    if (x.rating === 1) t = Math.max(t, x.rating_at || 0);
+    if (x.fav) t = Math.max(t, x.fav_at || 0);
+    const r = S.rec.get(x.id); if (r && r.la) t = Math.max(t, r.la);
+  }
+  return t;
+}
 function setSort(s) {
   const sel = $("#sortSel");
+  if (s === "liked" && !sel.querySelector('[value="liked"]')) (sel.querySelector('[value="match"]') || sel.firstElementChild).insertAdjacentHTML("afterend", `<option value="liked">Date liked</option>`);
+  if (s !== "liked" && S.view !== "foryou") sel.querySelector('[value="liked"]')?.remove();
   if (s === "match" && !sel.querySelector('[value="match"]')) sel.insertAdjacentHTML("afterbegin", `<option value="match">Best match</option>`);
   if (s !== "match" && S.view !== "foryou") sel.querySelector('[value="match"]')?.remove();
   if (s === "relevance" && !sel.querySelector('[value="relevance"]')) sel.insertAdjacentHTML("afterbegin", `<option value="relevance">Relevance</option>`);

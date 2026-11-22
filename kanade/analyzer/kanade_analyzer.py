@@ -80,7 +80,7 @@ CREATE TABLE rec(
     audio REAL, mix REAL,          -- 0-100 match (percentile within the library)
     why_audio TEXT, why_visual TEXT,
     ga TEXT, gm TEXT,              -- per taste group: comma-separated percentiles (audio, audio+visual)
-    liked INTEGER                  -- 1: the song is in the user's liked folders (a library copy of a liked file)
+    liked INTEGER                  -- the song is in the user's liked folders: date of that liked file (else 0)
 );
 DROP TABLE IF EXISTS taste_group;
 CREATE TABLE taste_group(id INTEGER PRIMARY KEY, name TEXT, size INTEGER, members TEXT);
@@ -877,12 +877,19 @@ def rank(eng: Engine):
     def gjoin(arrs, s):
         return ",".join(f"{a[s]:.1f}" for a in arrs) if arrs else None
 
-    in_folders = {t["twin"] for t in d.taste if t["twin"] is not None}
+    in_folders = {}                       # song -> date of the liked file (its "date modified": when it was saved)
+    for t in d.taste:
+        if t["twin"] is not None:
+            try:
+                at = int(os.path.getmtime(t["path"]))
+            except OSError:
+                at = 1
+            in_folders[t["twin"]] = max(in_folders.get(t["twin"], 0), at)
     rows = []
     for i, v in enumerate(d.vid):
         s = int(d.song_of[i])
         rows.append((int(v), round(float(pa[s]), 1), round(float(pm[s]), 1), like_names[near_a[s]],
-                     like_names[near_m[s]], gjoin(group_pa, s), gjoin(group_pm, s), int(s in in_folders)))
+                     like_names[near_m[s]], gjoin(group_pa, s), gjoin(group_pm, s), in_folders.get(s, 0)))
     summary = {**mood_info, "liked_songs": int(len(pos)), "disliked_songs": int((y < 0).sum()),
                "twins": sum(1 for t in d.taste if t["twin"] is not None), "loose": len(loose),
                "songs": len(d.keys), "seconds": round(time.time() - t0, 2)}

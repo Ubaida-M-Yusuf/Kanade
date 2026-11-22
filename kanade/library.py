@@ -23,7 +23,7 @@ def list_videos() -> list[list]:
     rows = db.q("""SELECT id, anime_id, title, title_english, type, number, part, version, song_title, artists,
                    year, folder, folder_season, fav, thumb_state, date_added, status, confidence, duration,
                    missing, has_override, season, anime_year, cover_path IS NOT NULL AS has_cover, fav_at, p_tags,
-                   width, height, media_at, nsfw, rating, theme_id
+                   width, height, media_at, nsfw, rating, theme_id, rating_at
                    FROM v_video WHERE missing=0""")
     return [list(r) for r in rows]
 
@@ -31,7 +31,7 @@ def list_videos() -> list[list]:
 VIDEO_COLS = ["id", "anime_id", "title", "title_english", "type", "number", "part", "version", "song", "artists",
               "year", "folder", "folder_season", "fav", "thumb", "added", "status", "conf", "duration", "missing",
               "override", "season", "anime_year", "has_cover", "fav_at", "tags", "width", "height", "tv", "nsfw",
-              "rating", "theme_id"]
+              "rating", "theme_id", "rating_at"]
 
 
 def list_anime() -> list[dict]:

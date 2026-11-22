@@ -205,6 +205,7 @@ SELECT
     (f.video_id IS NOT NULL) AS fav,
     f.added_at AS fav_at,
     COALESCE(rt.value, 0) AS rating,
+    rt.at AS rating_at,
     (o.video_id IS NOT NULL) AS has_override
 FROM video v
 LEFT JOIN user_override o ON o.video_id = v.id
