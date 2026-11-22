@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="kanade-token" content="%%TOKEN%%">
+<title>Kanade</title>
+<link rel="stylesheet" href="/ui/app.css">
+<link rel="icon" href="/ui/icon.svg" type="image/svg+xml">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-grid" viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-series" viewBox="0 0 24 24"><path d="M6 3h10a2 2 0 0 1 2 2v16l-7-4-7 4V5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-op" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-ed" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="16.5" cy="16" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-9.3-9.4C1.4 7.6 3.6 4 7.2 4c2 0 3.6 1.1 4.8 2.8C13.2 5.1 14.8 4 16.8 4c3.6 0 5.8 3.6 4.5 7.1-1.8 4.8-9.3 9.4-9.3 9.4z"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-review" viewBox="0 0 24 24"><path d="M12 3.5l9 16H3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 10v4.5M12 17.2v.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 6.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5.5M12 7.8v.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 13a8 8 0 0 0 14.6 4.5M5 3v4h4M19 21v-4h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4zM18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M7.5 10.5v9H4.5v-9zM7.5 19.5h9.2a2 2 0 0 0 2-1.6l1.2-6a2 2 0 0 0-2-2.4H13l.8-3.6a1.6 1.6 0 0 0-1.6-2l-.4.1-4.3 6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M7.5 13.5v-9H4.5v9zM7.5 4.5h9.2a2 2 0 0 1 2 1.6l1.2 6a2 2 0 0 1-2 2.4H13l.8 3.6a1.6 1.6 0 0 1-1.6 2l-.4-.1-4.3-6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-stack" viewBox="0 0 24 24"><rect x="3.5" y="8" width="13" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 5h11a2.5 2.5 0 0 1 2.5 2.5V15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+    <symbol id="i-size" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="13" y="13" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  </defs>
+</svg>
+
+<div id="app" class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 32 32"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#f472b6"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#lg)"/><path d="M12 9.5v13l11-6.5z" fill="#fff"/></svg></div>
+      <div><div class="brand-name">Kanade</div><div class="brand-sub">OP &amp; ED Library</div></div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-label">Library</div>
+      <a data-view="all"><svg><use href="#i-grid"/></svg><span>All Videos</span><b data-count="total"></b></a>
+      <a data-view="foryou" class="nav-foryou" title="Your library ranked by your taste · the number = strong matches (85%+)"><svg><use href="#i-spark"/></svg><span>For You</span><b data-count="foryou"></b></a>
+      <a data-view="series"><svg><use href="#i-series"/></svg><span>Anime Series</span><b data-count="series"></b></a>
+      <a data-view="op"><svg><use href="#i-op"/></svg><span>Openings</span><b data-count="ops"></b></a>
+      <a data-view="ed"><svg><use href="#i-ed"/></svg><span>Endings</span><b data-count="eds"></b></a>
+      <a data-view="fav"><svg><use href="#i-heart"/></svg><span>Favorites</span><b data-count="favs"></b></a>
+      <div class="nav-label">Browse</div>
+      <a data-view="year"><svg><use href="#i-cal"/></svg><span>By Year</span></a>
+      <a data-view="recent"><svg><use href="#i-clock"/></svg><span>Recently Added</span></a>
+      <a data-view="review"><svg><use href="#i-review"/></svg><span>Needs Review</span><b data-count="review" class="warn"></b></a>
+      <div class="nav-spacer"></div>
+      <a data-view="settings"><svg><use href="#i-gear"/></svg><span>Settings</span></a>
+    </nav>
+    <div class="jobs" id="jobs"></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn back hidden" id="backBtn" title="Back"><svg><use href="#i-back"/></svg></button>
+      <div class="search">
+        <svg><use href="#i-search"/></svg>
+        <input id="q" type="search" placeholder="Search titles, songs, artists, “bocchi op1”…" autocomplete="off" spellcheck="false">
+        <button class="clearx" id="qClear" type="button" title="Clear search" tabindex="-1"><svg><use href="#i-x"/></svg></button>
+        <kbd>/</kbd>
+      </div>
+      <div class="filters" id="filters">
+        <div class="seg" id="typeSeg">
+          <button data-type="">All</button><button data-type="OP">OP</button><button data-type="ED">ED</button>
+        </div>
+        <select id="yearSel" title="Year"><option value="">All years</option></select>
+        <div class="gfilter">
+          <button class="chip-btn gbtn" id="filterBtn" title="Filter by type, season, genre, tag, quality…">
+            <svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <span>Filters</span><b id="filterCount"></b>
+          </button>
+          <div class="gpop fpop hidden" id="filterPop"></div>
+        </div>
+        <div class="sfield" id="seriesField">
+          <input id="seriesFilter" list="seriesList" placeholder="Series…" title="Filter by series" autocomplete="off" spellcheck="false">
+          <button class="clearx" id="seriesClear" type="button" title="Clear series" tabindex="-1"><svg><use href="#i-x"/></svg></button>
+        </div>
+        <datalist id="seriesList"></datalist>
+        <select id="numSel" title="Only show openings/endings with this number (e.g. OP/ED 1 = every OP1 and ED1)"><option value="">Any OP/ED no.</option></select>
+        <button class="chip-btn" id="favOnly" title="Favorites only"><svg><use href="#i-heart"/></svg></button>
+        <button class="chip-btn on" id="stackBtn" title="Group versions of the same song into one card (click a stacked card to see all versions)"><svg><use href="#i-stack"/></svg></button>
+        <button class="chip-btn clearf hidden" id="clearFilters" title="Clear all filters and search"><svg><use href="#i-x"/></svg><span>Clear</span></button>
+        <select id="sortSel" title="Sort">
+          <option value="title">Title A–Z</option>
+          <option value="year_desc">Newest year</option>
+          <option value="year_asc">Oldest year</option>
+          <option value="added">Recently added</option>
+          <option value="number">OP/ED number</option>
+        </select>
+        <label class="zoom" title="Card size (also + / − keys or Ctrl + mouse wheel)">
+          <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <input type="range" id="sizeRange" min="0" max="4" step="1" value="2">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        </label>
+      </div>
+    </header>
+
+    <div class="view-head" id="viewHead">
+      <div>
+        <h1 id="viewTitle">All Videos</h1>
+        <div class="view-sub" id="viewSub"></div>
+        <div class="achips hidden" id="activeChips"></div>
+      </div>
+      <div class="view-actions" id="viewActions"></div>
+    </div>
+    <div class="yearbar hidden" id="yearBar"></div>
+    <div class="tastebar hidden" id="tasteBar"></div>
+
+    <div class="scroller" id="scroller" tabindex="-1">
+      <div class="canvas" id="canvas"></div>
+      <div class="empty hidden" id="empty"></div>
+    </div>
+    <div class="page hidden" id="page"></div>
+
+    <div class="bulkbar hidden" id="bulkbar"></div>
+  </main>
+
+  <aside class="details" id="details" aria-hidden="true"></aside>
+</div>
+
+<div class="ctxmenu hidden" id="ctx"></div>
+<div class="modal-wrap hidden" id="modalWrap"><div class="modal" id="modal"></div></div>
+<div class="toasts" id="toasts"></div>
+
+<script src="/ui/app.js"></script>
+</body>
+</html>

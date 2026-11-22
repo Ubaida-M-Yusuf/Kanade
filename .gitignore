@@ -1,0 +1,38 @@
+# Python / build output
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+build/
+dist/
+distnew/
+*.egg-info/
+
+# Anything a running Kanade creates (it normally lives in %LOCALAPPDATA%\Kanade, never commit it)
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+config.json
+instance.json
+*.lock
+*.log
+logs/
+thumbs/
+covers/
+cache/
+webview/
+engine/
+features.db*
+
+# Bundled FFmpeg binaries (separate licence, large)
+ffmpeg/
+*.exe
+
+# Local tooling / notes
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
