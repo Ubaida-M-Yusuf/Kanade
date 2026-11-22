@@ -1,5 +1,7 @@
 # Kanade: Anime OP/ED Library
 
+![Kanade: the openings of a year, with best-frame thumbnails, resolution badges and version stacks](docs/screenshot-grid.jpg)
+
 A Windows desktop app that turns a folder of anime openings and endings (for example an
 AnimeThemes-style archive organised as `2015\Spring\ShingekiNoKyojin-OP1.webm`) into a searchable,
 visual catalogue with proper titles, song credits, cover art, favourites, one-click playback in VLC and
@@ -27,6 +29,39 @@ Everything it creates (database, thumbnails, covers, cache, logs) lives in its o
 * **Corrections that stick:** edit any title, song or assignment; your edits always win over automatic data.
 * **Offline first and private:** after the first setup it needs no internet; nothing about your library or
   taste leaves your computer.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshot-series.jpg" alt="A series page: cover, genres and tags, links, the series order with sequels, movies and spin-offs, and its openings and endings"></td>
+<td width="50%"><img src="docs/screenshot-versions.jpg" alt="The versions of one song: every version and resolution with its own thumbnail"></td>
+</tr>
+<tr>
+<td align="center"><sub>Series page with the whole franchise in release order</sub></td>
+<td align="center"><sub>Every version of a song in one stack</sub></td>
+</tr>
+</table>
+
+## For You: recommendations that learn your taste
+
+Point Kanade at a folder (or several) of openings and endings you love, and **For You** ranks your whole library
+by how well each song fits that taste. Everything runs on your own computer; nothing about your taste is sent
+anywhere.
+
+* **It listens and looks.** Every video is analysed once by AI models running locally: a music model (MERT) for
+  rhythm, timbre and harmony, a music-and-language model (CLAP) for style, an image model (SigLIP 2) for the look
+  of the animation, plus the anime's genres, tags and era.
+* **It learns from you.** A small model is trained on your liked folders, favourites and 👍 / 👎 ratings, in about
+  a second, whenever you've rated a few songs. A 👎 hides the song immediately and teaches For You to avoid songs
+  like it; mistakes are undone completely by removing the rating.
+* **It finds your liked songs in your library.** Liked videos from anywhere (other folders, other sources) are
+  matched by name and confirmed by sound to the library copy of the same opening, so it learns from the right
+  file.
+* **Teach For You** plays your current top picks one by one, with sound, for quick 👍 / 👎: the fastest way to
+  sharpen it.
+* **Song types:** every song is labelled Intense, Energetic, Mellow or Calm from its own sound (an AudioSet
+  classifier), and For You shows your best matches of each type.
+* **Accurate:** in a held-out test on a real library, liked songs the model had never seen landed at the 94th
+  percentile (median), and about half of them in the top 5 %. Details in [RECOMMENDATIONS.md](RECOMMENDATIONS.md).
 
 ## Requirements
 
