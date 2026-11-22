@@ -569,19 +569,27 @@ def list_taste_files(folders):
 
 
 def pending_items(eng: Engine):
-    done = {(k, key): (fp, model) for k, key, fp, model in eng.db.execute("SELECT kind, key, fp, model FROM feat")}
+    # A video counts as analysed only when its complete result was saved (sound, style and look, in one commit).
+    # Anything being read when the app quit or crashed was never saved, so it is simply analysed again.
+    done = {(k, key): (fp, model) for k, key, fp, model in eng.db.execute(
+        "SELECT kind, key, fp, model FROM feat WHERE audio IS NOT NULL AND clap IS NOT NULL AND visual IS NOT NULL")}
+    # analysed before the song-type classifier existed: measured again at the very end (results stay meanwhile)
+    unmeasured = {(k, key) for k, key in eng.db.execute("SELECT kind, key FROM feat WHERE mood IS NULL")}
+    late = []
     items = []
     folders = [f for f in eng.cfg.get("taste_folders") or [] if os.path.isdir(f)]
     taste = list_taste_files(folders)
     wanted_taste = {t[1] for t in taste}
     # forget liked files that were removed / whose folder was removed
-    for (k, key) in list(done):
-        if k == "taste" and key not in wanted_taste:
+    for (key,) in eng.db.execute("SELECT key FROM feat WHERE kind='taste'").fetchall():
+        if key not in wanted_taste:
             eng.db.execute("DELETE FROM feat WHERE kind='taste' AND key=?", (key,))
     eng.db.commit()
     for t in taste:
         if done.get(("taste", t[1])) != (t[2], MODEL_TAG):
             items.append(t)
+        elif ("taste", t[1]) in unmeasured:
+            late.append(t)
     lib = eng.library_db()
     tcols = {r[1] for r in lib.execute("PRAGMA table_info(video)")}
     algo = "v.thumb_algo" if "thumb_algo" in tcols else "0"
@@ -592,9 +600,11 @@ def pending_items(eng: Engine):
             "LEFT JOIN anime a ON a.id=v.anime_id LEFT JOIN anime_override ao ON ao.anime_id=a.id "
             "WHERE v.missing=0 ORDER BY v.folder_year DESC, v.path"):
         fp = f"{size}:{int(mtime or 0)}"
+        item = ("lib", str(vid), fp, path, bool(upgrade), dur, title)   # 5th: thumbnail due an upgrade
         if done.get(("lib", str(vid))) != (fp, MODEL_TAG):
-            # 5th field: this video's thumbnail is due an upgrade (made from the frames read anyway)
-            by_folder.setdefault(folder, []).append(("lib", str(vid), fp, path, bool(upgrade), dur, title))
+            by_folder.setdefault(folder, []).append(item)
+        elif ("lib", str(vid)) in unmeasured:
+            late.append(item)
     # Every era early: runs of 8 neighbouring files from each year folder in turn. For You is then representative
     # of the whole library long before the analysis ends; runs keep the disk seeks short (costs ~2 % speed).
     runs = [[f[i:i + 8] for i in range(0, len(f), 8)] for f in by_folder.values()]
@@ -619,6 +629,7 @@ def pending_items(eng: Engine):
     if first:
         items = [i for i in items if i[0] == "taste"] + [i for i in items if i[0] == "lib" and i[1] in first] + \
                 [i for i in items if i[0] == "lib" and i[1] not in first]
+    items += late
     if eng.sample:                       # testing aid: a random sample of the library (+ named files)
         import random
         libs = [i for i in items if i[0] == "lib"]
@@ -729,9 +740,9 @@ def analyse(eng: Engine):
         now = time.time()
         for i, (item, audio, ims, dur, cuts, dsp, thumb, _, _m) in enumerate(batch):
             kind, key, fp, path, _, _, name = item
-            if audio is None:
-                failed[0] += 1             # unreadable right now (disk asleep, file in use...): retried next run
-                continue
+            if audio is None or not any(o == i for o in img_owner):
+                failed[0] += 1             # unreadable right now (disk asleep, file in use...): retried next
+                continue                   # run, never saved half-analysed
             if thumb:
                 eng.db.execute("INSERT INTO thumb_made(video_id,path,at) VALUES(?,?,?) ON CONFLICT(video_id) "
                                "DO UPDATE SET path=excluded.path, at=excluded.at", (int(key), thumb, now))

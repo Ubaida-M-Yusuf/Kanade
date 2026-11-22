@@ -173,6 +173,15 @@ def api_post(path: str, body: dict):
         return {"ok": True}
     if path == "/api/foryou/learn":
         return {"learning": jm.taste_changed(immediate=True)}
+    if path in ("/api/copy/plan", "/api/copy/start"):
+        from . import copier
+        try:
+            if path == "/api/copy/plan":
+                p = copier.plan(_ids(body), str(body.get("dest") or ""))
+                return {k: p[k] for k in ("dest", "count", "bytes", "free", "enough_space", "renamed", "missing")}
+            return jm.start_copy(_ids(body), str(body.get("dest") or ""))
+        except ValueError as e:
+            raise ApiError(str(e))
     if path == "/api/play":
         activity.touch_play()
         library.play(int(body["id"]))

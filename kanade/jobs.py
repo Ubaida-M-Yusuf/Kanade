@@ -63,6 +63,7 @@ class JobManager:
         self._started = time.time()
         from . import recommend
         self.recs = Progress("For You")
+        self.copy = Progress("Copy")
         self.engine = recommend.EngineRunner(self.recs)
         self._rank_timer: threading.Timer | None = None
         self._rank_lock = threading.Lock()
@@ -74,6 +75,7 @@ class JobManager:
     # ---------------------------------------------------------- public API
     def status(self) -> dict:
         return {"pipeline": self.pipeline.as_dict(), "thumbs": self.thumbs.as_dict(), "recs": self.recs.as_dict(),
+                "copy": self.copy.as_dict(),
                 "library_version": db.version("library"), "media_version": db.version("media"),
                 "recs_version": db.version("recs"), "last_scan": self.last_scan}
 
@@ -122,6 +124,36 @@ class JobManager:
 
     def wake_thumbs(self):
         self._thumb_wake.set()
+
+    def start_copy(self, ids: list[int], dest: str) -> dict:
+        """Copy videos to a folder in the background (see copier.py: never overwrites, never leaves half files)."""
+        from . import copier
+        if self.copy.state == "running":
+            raise ValueError("A copy is already running; wait for it to finish.")
+        plan = copier.plan(ids, dest)
+        if not plan["count"]:
+            raise ValueError("Nothing to copy (the files are missing).")
+        if not plan["enough_space"]:
+            raise ValueError(f"Not enough free space in {plan['dest']}: {plan['bytes'] / 1e9:.1f} GB needed, "
+                             f"{plan['free'] / 1e9:.1f} GB free.")
+        c = self.copy
+        c.state, c.error, c.message = "running", None, ""
+
+        def run():
+            try:
+                copier.clean_partials(plan["dest"])
+                res = copier.copy_files(plan, c, self._stop)
+                msg = f"Copied {res['copied']} of {plan['count']} videos to {plan['dest']}"
+                if res["failed"]:
+                    msg += f" · {len(res['failed'])} failed (see the log)"
+                c.state, c.phase, c.current, c.message = ("error" if res["failed"] and not res["copied"] else "idle"), "", "", msg
+                c.error = "; ".join(res["failed"][:3]) or None
+                log.info(msg)
+            except Exception as e:
+                log.exception("copy failed")
+                c.state, c.error, c.message = "error", str(e), f"Copy failed: {e}"
+        threading.Thread(target=run, name="copy", daemon=True).start()
+        return {k: plan[k] for k in ("dest", "count", "bytes", "renamed", "missing")}
 
     def stop(self, wait_s: float = 1.5):
         """Stop background work; give the thumbnail worker a moment to save what it finished."""
@@ -620,7 +652,8 @@ class JobManager:
                         if res[2] is None and res[0]["thumb_state"] == 0:
                             log.warning("no thumbnail for %s (unreadable or corrupt?)", res[0]["path"])
                     except Exception:
-                        log.exception("thumbnail job failed")
+                        if not self._stop.is_set():       # work cancelled because Kanade is closing: not an error
+                            log.exception("thumbnail job failed")
                     done += 1
                     t.set(done=done, current=None if waiting[0] else current)
                     nxt = next(it, None)

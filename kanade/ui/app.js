@@ -29,7 +29,7 @@ const S = {
   boot: null, settings: {}, videos: [], byId: new Map(), anime: [], animeById: new Map(), counts: {},
   view: "all", seriesId: null, history: [],
   q: "", searchIds: null, searchRank: null,
-  filters: { type: "", year: "", series: "", num: "", fav: false, genres: new Set(), genreMode: "any",
+  filters: { type: "", year: "", series: "", num: "", fav: false, artist: "", genres: new Set(), genreMode: "any",
              formats: new Set(), seasons: new Set(), quality: new Set(), lyrics: false, original: false,
              content: { sug: "", exp: "", nsfw: "" } },
   genreSearch: "", fTab: "type",
@@ -251,8 +251,31 @@ function panelFilterCount() {
     ["sug", "exp", "nsfw"].filter((k) => cf[k]).length;
 }
 
+/** "Saori Hayami (as Yachiyo), ryo" -> ["Saori Hayami", "ryo"] */
+function splitArtists(text) {
+  return String(text || "").split(/,\s*/).map((a) => a.replace(/\s*\((?:as|cv|from)[^)]*\)\s*$/i, "").trim()).filter(Boolean);
+}
+function artistLinks(text, cls = "alink") {
+  const names = splitArtists(text);
+  return names.length ? names.map((a) => `<a href="#" class="${cls}" data-artist="${esc(a)}" title="Show every song by ${esc(a)}">${esc(a)}</a>`).join(", ") : "";
+}
+/** Show every video by one singer / band, across all series. */
+function showArtist(name) {
+  S.filters.artist = name;
+  if (!isGridView() || S.view === "anime" || S.view === "series" || S.view === "foryou") setView("all");
+  else render(false);
+  toast(`Songs by ${name}`);
+}
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-artist]");
+  if (!a) return;
+  e.preventDefault(); e.stopPropagation();
+  if (pendingClick) { clearTimeout(pendingClick.timer); pendingClick = null; }
+  showArtist(a.dataset.artist);
+}, true);
 function activeFilterList() {
   const f = S.filters, out = [];
+  if (f.artist) out.push({ g: "artist", k: f.artist, label: "Artist: " + f.artist });
   for (const k of f.formats) out.push({ g: "format", k, label: fmtFormat(k) });
   for (const k of f.seasons) out.push({ g: "season", k, label: k });
   for (const k of f.genres) out.push({ g: "genre", k, label: k.startsWith("tag:") ? "#" + gLabel(k) : k });
@@ -269,7 +292,8 @@ function activeFilterList() {
 
 function removeFilter(g, k) {
   const f = S.filters;
-  if (g === "format") f.formats.delete(k);
+  if (g === "artist") f.artist = "";
+  else if (g === "format") f.formats.delete(k);
   else if (g === "season") f.seasons.delete(k);
   else if (g === "genre") f.genres.delete(k);
   else if (g === "quality") f.quality.delete(k);
@@ -288,7 +312,7 @@ function toggleFilter(g, k, on) {
 
 function anyFilterActive() {
   const f = S.filters;
-  return panelFilterCount() > 0 || !!(S.q || f.type || f.year || f.series || f.num || f.fav);
+  return panelFilterCount() > 0 || !!(S.q || f.type || f.year || f.series || f.num || f.fav || f.artist);
 }
 
 function updateGenreButton() {
@@ -414,7 +438,7 @@ function setGenre(g) {
 }
 
 function clearAllFilters() {
-  S.filters = { type: "", year: "", series: "", num: "", fav: false, genres: new Set(), genreMode: S.filters.genreMode,
+  S.filters = { type: "", year: "", series: "", num: "", fav: false, artist: "", genres: new Set(), genreMode: S.filters.genreMode,
                 formats: new Set(), seasons: new Set(), quality: new Set(), lyrics: false, original: false,
                 content: { sug: "", exp: "", nsfw: "" } };
   S.genreSearch = "";
@@ -506,6 +530,10 @@ function applyFilters(items) {
   if (aset) out = out.filter((x) => aset.has(x.anime_id));
   out = videoFacetFilter(out);
   if (f.fav) out = out.filter((x) => x.fav);
+  if (f.artist) {
+    const want = f.artist.toLowerCase();
+    out = out.filter((x) => x.artists && splitArtists(x.artists).some((a) => a.toLowerCase() === want));
+  }
   if (f.series) {
     const ids = new Set(S.anime.filter((a) => a.title === f.series).map((a) => a.id));
     if (ids.size) out = out.filter((x) => ids.has(x.anime_id));
@@ -666,7 +694,7 @@ function cardHTML(v, idx) {
         <button class="act${rs.liked ? " on" : ""}" data-rate="1" title="${rs.liked ? "Remove like" : "Like: more songs like this in For You (L)"}">${icon("up")}</button>
         <button class="act${rs.disliked ? " on" : ""}" data-rate="-1" title="${rs.disliked ? "Remove dislike (show it in For You again)" : "Dislike: hide from For You and learn to avoid songs like this (D)"}">${icon("down")}</button>
         <button class="act fav${v.fav ? " on" : ""}" data-fav="${v.id}" title="Favorite (F)">${icon("heart")}</button></span>`;
-  const song = v.song ? `${esc(v.song)}${v.artists ? ` <span class="artist">– ${esc(v.artists)}</span>` : ""}` : `<span class="artist">${v.status === "review" ? "Unidentified" : "Unknown song"}</span>`;
+  const song = v.song ? `${esc(v.song)}${v.artists ? ` <span class="artist">– ${artistLinks(v.artists, "alink quiet")}</span>` : ""}` : `<span class="artist">${v.status === "review" ? "Unidentified" : "Unknown song"}</span>`;
   const an = S.animeById.get(v.anime_id);
   const flag = an && an.explicit ? `<span class="cflag x">18+</span>` : an && an.suggestive ? `<span class="cflag">Ecchi</span>` : "";
   let gtag = "";
@@ -738,6 +766,9 @@ function setView(view, opts = {}) {
     if (S.ratedSinceLearn) { S.ratedSinceLearn = 0; api.post("/api/foryou/learn").catch(() => {}); }
   }
   if (view === "foryou" && !wasForYou && !S.fySetupAsked) maybeAskForYouSetup();
+  if (view === "foryou" && !wasForYou && S.recMode !== "mix") {     // For You always opens with all signals (the
+    S.recMode = "mix"; S.counts.foryou = forYouCount(); updateCounts(); //  most accurate); "Sound" is per visit
+  }
   if (view === "foryou" && !wasForYou) {
     if (S.pendingRec) { applyRecs(S.pendingRec); S.fyMemo = null; opts.scroll = 0; }    // new picks: start at the top
     else if (S.fyMemo && S.fyMemo.sig === fySig()) opts.scroll = S.fyMemo.top;
@@ -904,8 +935,8 @@ function renderVideoGrid() {
         <button data-fytab="liked" class="${S.fyTab === "liked" ? "on" : ""}">${icon("up")}Liked<b>${nLiked || ""}</b></button>
         <button data-fytab="hidden" class="${S.fyTab === "hidden" ? "on" : ""}">${icon("down")}Hidden<b>${nHidden || ""}</b></button></div>
       <div class="seg fy-mode" title="What “similar” means">
-        <button data-mode-fy="audio" class="${S.recMode !== "mix" ? "on" : ""}" title="Only how the songs sound">${icon("ed")}Sound</button>
-        <button data-mode-fy="mix" class="${S.recMode === "mix" ? "on" : ""}" title="Sound, the look of the video and the anime's genres">${icon("op")}Sound + look + genre</button></div>`;
+        <button data-mode-fy="mix" class="${S.recMode === "mix" ? "on" : ""}" title="Sound, the look of the video and the anime's genres (most accurate)">${icon("op")}Sound + look + genre</button>
+        <button data-mode-fy="audio" class="${S.recMode !== "mix" ? "on" : ""}" title="Only how the songs sound">${icon("ed")}Sound</button></div>`;
     $("#viewActions").onclick = (e) => {
       if (e.target.closest("[data-fyteach]")) return openTeach();
       const t = e.target.closest("[data-fytab]");
@@ -1244,7 +1275,7 @@ function detailsHTML(v) {
       <div class="d-title" data-act="series" title="Open series">${esc(v.title)}</div>
       ${v.title_english && v.title_english !== v.title ? `<div class="d-alt">${esc(v.title_english)}</div>` : ""}
       ${v.title_japanese ? `<div class="d-jp">${esc(v.title_japanese)}</div>` : ""}
-      <div class="d-song"><div class="s">${esc(v.song_title || "Unknown song")}</div><div class="a">${esc(v.artists || "Unknown artist")}</div></div>
+      <div class="d-song"><div class="s">${esc(v.song_title || "Unknown song")}</div><div class="a">${artistLinks(v.artists) || "Unknown artist"}</div></div>
       <div class="d-actions">
         <button class="btn primary" data-act="play">${icon("play")}Play in VLC</button>
         ${v.anime_id ? `<button class="btn" data-act="series" title="All openings and endings of this series, its seasons and related series">${icon("series")}Open series</button>` : ""}
@@ -1447,6 +1478,64 @@ function openTeach() {
   show();
 }
 
+/* ------------------------------------------------------------------ copy to a folder */
+const fmtBytes = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(2)} GB` : `${Math.max(1, Math.round(b / 1e6))} MB`);
+/** Copy the selected videos to a folder: shows what happens to names that already exist before anything is copied. */
+function openCopy(cardIds) {
+  const cards = cardIds.map((id) => S.byId.get(id)).filter(Boolean);
+  const stacked = cards.some((v) => songVideos(v).length > 1);
+  const m = $("#modal");
+  let dest = (() => { try { return localStorage.getItem("kanade.copydest") || ""; } catch (e) { return ""; } })();
+  let planned = null;
+  const ids = () => ($("#cpAll") && $("#cpAll").checked ? [...new Set(cards.flatMap((v) => songVideos(v).map((x) => x.id)))] : cards.map((v) => v.id));
+  m.classList.add("setupm");
+  m.innerHTML = `<div class="modal-head"><div><h3>${icon("folder")} Copy ${cards.length} video${cards.length === 1 ? "" : "s"} to a folder</h3>
+      <div class="sub">Your library is only read. Existing files are never overwritten.</div></div>
+      <button class="icon-btn" data-cx="close" title="Close (Esc)">${icon("x")}</button></div>
+    <div class="modal-body sp">
+      <div class="inline"><input id="cpDest" placeholder="Choose a folder…" value="${esc(dest)}"><button class="btn" data-cx="browse">${icon("folder")}Browse…</button></div>
+      ${stacked ? `<label class="check-row"><input type="checkbox" id="cpAll"> Copy every version of each song (not only the one shown on the card)</label>` : ""}
+      <div id="cpPlan" class="sp-need">Choose where to copy to.</div>
+      <div class="sp-actions"><button class="btn" data-cx="close">Cancel</button><button class="btn primary" data-cx="go" disabled>${icon("check")}Copy</button></div></div>`;
+  $("#modalWrap").classList.remove("hidden");
+  const refresh = async () => {
+    dest = $("#cpDest").value.trim();
+    const box = $("#cpPlan"), go = m.querySelector('[data-cx="go"]');
+    planned = null; go.disabled = true;
+    if (!dest) { box.textContent = "Choose where to copy to."; return; }
+    box.textContent = "Checking…";
+    try {
+      const p = await api.post("/api/copy/plan", { ids: ids(), dest });
+      planned = p;
+      const parts = [`<b>${p.count}</b> file${p.count === 1 ? "" : "s"} · ${fmtBytes(p.bytes)} → <code>${esc(p.dest)}</code> (${fmtBytes(p.free)} free)`];
+      if (p.renamed.length) parts.push(`<div class="cp-warn">${p.renamed.length} name${p.renamed.length === 1 ? " is" : "s are"} already used in that folder. ${p.renamed.length === 1 ? "That file" : "Those files"} will be saved with a number added, for example <b>${esc(p.renamed[0][1])}</b>. Nothing is overwritten.</div>`);
+      if (p.missing.length) parts.push(`<div class="cp-warn">${p.missing.length} file${p.missing.length === 1 ? " is" : "s are"} missing from the disk and will be skipped.</div>`);
+      if (!p.enough_space) parts.push(`<div class="cp-warn">Not enough free space in that folder.</div>`);
+      box.innerHTML = parts.join("");
+      go.disabled = !p.count || !p.enough_space;
+    } catch (err) { box.innerHTML = `<div class="cp-warn">${esc(err.message)}</div>`; }
+  };
+  m.onchange = (e) => { if (e.target.id === "cpAll" || e.target.id === "cpDest") refresh(); };
+  m.onclick = async (e) => {
+    const b = e.target.closest("[data-cx]"); if (!b) return;
+    if (b.dataset.cx === "close") return closeModal();
+    if (b.dataset.cx === "browse") {
+      try { const r = await api.post("/api/pick-folder"); if (r.path) { $("#cpDest").value = r.path; refresh(); } } catch (err) { toast(err.message, true); }
+      return;
+    }
+    if (b.dataset.cx === "go" && planned) {
+      try {
+        const r = await api.post("/api/copy/start", { ids: ids(), dest: planned.dest });
+        try { localStorage.setItem("kanade.copydest", planned.dest); } catch (err) { /* ignore */ }
+        closeModal();
+        toast(`Copying ${r.count} video${r.count === 1 ? "" : "s"} (${fmtBytes(r.bytes)})… progress is in the sidebar`);
+        S.copyWatch = true;
+      } catch (err) { toast(err.message, true); }
+    }
+  };
+  if (dest) refresh();
+}
+
 /* ------------------------------------------------------------------ versions pop-up */
 function versionTileHTML(v) {
   const res = resLabel(v.height);
@@ -1619,6 +1708,8 @@ canvas.addEventListener("contextmenu", (e) => {
   items.push(rs.disliked ? { label: "Remove dislike (show in For You again)", icon: "eye", k: "D", fn: () => rateSongs(ids, 0) }
                          : { label: many ? `Dislike ${ids.length} songs` : "Dislike (hide from For You)", icon: "down", k: "D", fn: () => rateSongs(ids, -1) });
   items.push({ sep: true });
+  items.push({ label: many ? `Copy ${ids.length} videos to a folder…` : "Copy to a folder…", icon: "folder", fn: () => openCopy(ids) });
+  if (!many && v && v.artists) for (const a of splitArtists(v.artists).slice(0, 2)) items.push({ label: `More by ${a}`, icon: "ed", fn: () => showArtist(a) });
   items.push({ label: many ? `Edit ${ids.length} videos…` : "Edit metadata…", icon: "edit", k: "E", fn: () => openEditor(ids) });
   items.push({ label: allFav ? "Remove from favorites" : "Add to favorites", icon: "heart", k: "F", fn: () => toggleFav(ids, !allFav) });
   if (ids.some((i) => S.byId.get(i)?.status === "review")) items.push({ label: "Accept suggested match", icon: "check", fn: async () => { const r = await api.post("/api/accept", { ids }); toast(`Accepted ${r.accepted}`); loadData(); } });
@@ -1690,6 +1781,7 @@ function renderBulkbar() {
   bb.innerHTML = `<span class="n">${n} selected</span>
     <button class="btn sm" data-b="fav">${icon("heart")}Favorite</button>
     <button class="btn sm" data-b="unfav">Unfavorite</button>
+    <button class="btn sm" data-b="copy">${icon("folder")}Copy to folder…</button>
     <button class="btn sm" data-b="like">${icon("up")}Like</button>
     <button class="btn sm" data-b="dislike">${icon("down")}Dislike</button>
     <button class="btn sm" data-b="edit">${icon("edit")}Edit / assign…</button>
@@ -1700,6 +1792,7 @@ function renderBulkbar() {
     const ids2 = [...S.sel];
     if (b.dataset.b === "fav") toggleFav(ids2, true);
     if (b.dataset.b === "unfav") toggleFav(ids2, false);
+    if (b.dataset.b === "copy") openCopy(ids2);
     if (b.dataset.b === "like") rateSongs(ids2, 1);
     if (b.dataset.b === "dislike") rateSongs(ids2, -1);
     if (b.dataset.b === "edit") openEditor(ids2);
@@ -2250,7 +2343,9 @@ let lastMsg = "";
 async function poll() {
   try {
     const st = await api.get("/api/status");
-    $("#jobs").innerHTML = jobHTML("Library", st.pipeline) + jobHTML("Thumbnails", st.thumbs) + jobHTML("For You", st.recs);
+    $("#jobs").innerHTML = jobHTML("Library", st.pipeline) + jobHTML("Thumbnails", st.thumbs) + jobHTML("For You", st.recs) +
+      (st.copy && st.copy.state === "running" ? jobHTML("Copy", st.copy) : "");
+    if (S.copyWatch && st.copy && st.copy.state !== "running") { S.copyWatch = false; toast(st.copy.message || "Copy finished", st.copy.state === "error"); }
     const recWasRunning = S.recProgress && S.recProgress.state === "running";
     S.recProgress = st.recs;
     if (st.recs_version !== S.recVersion || (recWasRunning && st.recs.state !== "running")) { S.recVersion = st.recs_version; loadRecs(); }

@@ -154,7 +154,9 @@ FFmpeg is a separate program under the LGPL/GPL licence and is distributed along
 | Series page from a video | **Open series** in the details panel, or right-click ▸ *Open series page* |
 | Ecchi / 18+ | *Filters ▸ Content* hides or shows suggestive and adult series (ratings combined from AniList, Kitsu and AnimeThemes) |
 | Favourite | hover a card and click ♥, or press **F** (favourites also count as likes for For You) |
-| Multi-select | **Ctrl**+click, **Shift**+click, **Ctrl+A** |
+| Multi-select | **Ctrl**+click, **Shift**+click, **Ctrl+A** (select all in the current view, e.g. For You ▸ Liked) |
+| Songs by an artist | click a singer or band name (on a card or in the details panel), or right-click ▸ *More by …*: every opening and ending they sang, across all series. The *Artist* chip under the title removes the filter |
+| Copy to a folder | right-click ▸ *Copy to a folder…* (or the *Copy to folder…* button when several are selected). Before copying, Kanade shows the size, the free space and any names that already exist there: those files get a number (`Name (2).webm`); nothing is ever overwritten. Files are copied to a hidden temporary name and only get their real name once complete, so quitting or a crash never leaves a broken file. Copying into the library folder itself is refused |
 | Edit metadata | right-click ▸ *Edit metadata*, or press **E** |
 | Arrow keys | move the selection; **Esc** closes panels |
 
