@@ -115,6 +115,7 @@ class Engine:
         self.status ={"state": "running", "phase": "Starting", "done": 0, "total": 0, "current": "", "error": None}
         self._last_status = 0.0
         self._stop_requested = False
+        self.late_keys: set = set()
         self._parent = _open_process(getattr(args, "parent_pid", 0) or 0)
 
     # progress for the app (it polls features.db meta 'status')
@@ -630,6 +631,7 @@ def pending_items(eng: Engine):
         items = [i for i in items if i[0] == "taste"] + [i for i in items if i[0] == "lib" and i[1] in first] + \
                 [i for i in items if i[0] == "lib" and i[1] not in first]
     items += late
+    eng.late_keys = {(i[0], i[1]) for i in late}   # shown as a separate step in the status
     if eng.sample:                       # testing aid: a random sample of the library (+ named files)
         import random
         libs = [i for i in items if i[0] == "lib"]
@@ -782,7 +784,8 @@ def analyse(eng: Engine):
                 got = got.result()                 # the CPU stage never raises (see cpu_stage)
             batch.append(got)
             done += 1
-            eng.set_status(done=done, current=os.path.basename(got[0][3]))
+            phase = "Re-checking song types" if (got[0][0], got[0][1]) in eng.late_keys else "Analysing videos"
+            eng.set_status(phase=phase, done=done, current=os.path.basename(got[0][3]))
             if len(batch) >= 8:
                 flush()
             if eng.should_stop():
@@ -792,7 +795,7 @@ def analyse(eng: Engine):
                 flush()
                 rank(eng)
                 last_rank = time.time()
-                eng.set_status(force=True, phase="Analysing videos")
+                eng.set_status(force=True, phase=phase)
         flush()                                    # every finished video is saved, also when stopping
     finally:
         pool.shutdown(wait=True)
