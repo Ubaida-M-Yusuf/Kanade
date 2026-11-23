@@ -5,7 +5,8 @@ Sources (any one is enough, so little slips through):
   * Kitsu    - nsfw flag, age rating R18, rating notes that mention nudity / sexual content
   * AnimeThemes - NSFW marks on individual opening/ending videos (also flags the video itself)
   * MyAnimeList - genres / themes (Ecchi, Hentai, Erotica, Gore, Horror) and the Rx rating, with the user's own
-    client ID (Settings). MyAnimeList only ADDS: every mark the other sources give stays.
+    client ID (Settings). MyAnimeList only ADDS: every mark the other sources give stays. Each series is fetched
+    once: mal_at > 0 = complete (never asked again), < 0 = incomplete (asked again after RETRY_DAYS), 0 = not yet.
 
 A second mark, gore / horror ("dark": 2 gore, 1 horror only), comes from MyAnimeList's Gore / Horror genres, AniList's
 Horror genre and AniList's Gore / Body Horror / Torture / Cannibalism tags.
@@ -28,7 +29,7 @@ GUIDE_RE = re.compile(r"nudity|sexual|ecchi|fan ?service|erotic", re.I)
 
 RULES_VERSION = "2"             # bump when the rules below change: every series is re-marked (offline)
 GORE_TAGS = ("Gore", "Body Horror", "Torture", "Cannibalism")
-MAL_DAYS = 180                  # MyAnimeList genres are asked again after this many days
+RETRY_DAYS = 30                 # an incomplete answer (no genres yet, e.g. not aired) is asked again after this
 
 
 def classify(src: dict, genres=(), tags=()) -> tuple[int, int, int, list[str], list[str]]:
@@ -116,9 +117,10 @@ def reclassify_all() -> int:
 
 
 def mal_status() -> dict:
-    r = db.q1("SELECT COUNT(*) total, SUM(mal_at>0) done FROM anime WHERE mal_id IS NOT NULL "
+    r = db.q1("SELECT COUNT(*) total, SUM(mal_at>0) done, SUM(mal_at<0) waiting FROM anime WHERE mal_id IS NOT NULL "
               "AND id IN (SELECT anime_id FROM v_video)")
-    return {"total": r["total"] or 0, "done": r["done"] or 0, "error": db.meta_get("mal_error") or ""}
+    return {"total": r["total"] or 0, "done": r["done"] or 0, "waiting": r["waiting"] or 0,
+            "error": db.meta_get("mal_error") or ""}
 
 
 def mal_genres_of(content_json: str) -> list[str]:
@@ -131,8 +133,8 @@ def refresh_mal(client_id: str, progress=None, should_stop=lambda: False, on_sta
     25 series; a quit or a network problem loses at most that, and the rest continues next time."""
     if not client_id:
         return 0
-    rows = db.q("SELECT id, mal_id FROM anime WHERE mal_id IS NOT NULL AND mal_at<? AND "
-                "id IN (SELECT anime_id FROM v_video) ORDER BY mal_at, id", (time.time() - MAL_DAYS * 86400,))
+    rows = db.q("SELECT id, mal_id FROM anime WHERE mal_id IS NOT NULL AND (mal_at=0 OR (mal_at<0 AND mal_at>?)) "
+                "AND id IN (SELECT anime_id FROM v_video) ORDER BY mal_at DESC, id", (-(time.time() - RETRY_DAYS * 86400),))
     if not rows:
         return 0
     if on_start:
@@ -154,7 +156,8 @@ def refresh_mal(client_id: str, progress=None, should_stop=lambda: False, on_sta
                 src = _stored_sources(r["content"])
                 if info is not None:
                     src["mal"] = info
-                _apply(c, aid, src, r["genres"], r["tags"], ", mal_at=?", (now,))
+                complete = bool(info and info.get("genres"))      # no genres yet / unknown: ask again later
+                _apply(c, aid, src, r["genres"], r["tags"], ", mal_at=?", (now if complete else -now,))
         got.clear()
         db.bump_library_version()
 

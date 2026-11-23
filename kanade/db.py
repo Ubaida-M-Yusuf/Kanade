@@ -284,6 +284,8 @@ def _migrate(conn):
         conn.execute("ALTER TABLE anime ADD COLUMN suggestive INTEGER NOT NULL DEFAULT 0")
         conn.execute("ALTER TABLE anime ADD COLUMN explicit INTEGER NOT NULL DEFAULT 0")
         conn.execute("ALTER TABLE anime ADD COLUMN content_at REAL NOT NULL DEFAULT 0")
+    if "genres_at" in cols:   # an empty AniList answer is not "done": retry it (now marked < 0, see jobs.py)
+        conn.execute("UPDATE anime SET genres_at=-1 WHERE genres_at>0 AND genres='[]' AND tags='[]'")
     if "dark" not in cols:    # gore / horror mark (2 gore, 1 horror) and when MyAnimeList was last asked
         conn.execute("ALTER TABLE anime ADD COLUMN dark INTEGER NOT NULL DEFAULT 0")
         conn.execute("ALTER TABLE anime ADD COLUMN mal_at REAL NOT NULL DEFAULT 0")

@@ -102,6 +102,46 @@ def lower_thread_priority():
         pass
 
 
+def clipboard_text() -> str:
+    """Text on the system clipboard ('' if none): for the app's own Paste menu (the window has no built-in one)."""
+    if IS_WINDOWS:
+        import ctypes
+        from ctypes import wintypes
+        user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+        user32.GetClipboardData.restype = wintypes.HANDLE
+        kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+        kernel32.GlobalLock.restype = wintypes.LPVOID
+        kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+        CF_UNICODETEXT = 13
+        for _ in range(5):                              # another program may hold the clipboard for a moment
+            if user32.OpenClipboard(None):
+                break
+            import time
+            time.sleep(0.05)
+        else:
+            return ""
+        try:
+            h = user32.GetClipboardData(CF_UNICODETEXT)
+            if not h:
+                return ""
+            p = kernel32.GlobalLock(h)
+            if not p:
+                return ""
+            try:
+                return ctypes.wstring_at(p)
+            finally:
+                kernel32.GlobalUnlock(h)
+        finally:
+            user32.CloseClipboard()
+    for cmd in (["pbpaste"], ["wl-paste", "-n"], ["xclip", "-selection", "clipboard", "-o"], ["xsel", "-bo"]):
+        if shutil.which(cmd[0]):
+            try:
+                return subprocess.run(cmd, capture_output=True, text=True, timeout=3).stdout
+            except (OSError, subprocess.SubprocessError):
+                continue
+    return ""
+
+
 def message_box(title: str, text: str):
     """A simple notice when no window is open yet."""
     if IS_WINDOWS:

@@ -1932,7 +1932,33 @@ function showCtx(x, y, items) {
 function hideCtx() { $("#ctx").classList.add("hidden"); }
 document.addEventListener("mousedown", (e) => { if (!e.target.closest("#ctx")) hideCtx(); });
 window.addEventListener("blur", hideCtx);
-document.addEventListener("contextmenu", (e) => { if (!e.target.closest("input,textarea") && !e.defaultPrevented) e.preventDefault(); });
+document.addEventListener("contextmenu", (e) => {
+  const el = e.target.closest("input,textarea");
+  if (!el) { if (!e.defaultPrevented) e.preventDefault(); return; }
+  if (el.type && !["text", "search", "password", "url", "number", "email", ""].includes(el.type)) return;
+  e.preventDefault();
+  textFieldMenu(el, e.clientX, e.clientY);
+});
+/** Right-click in a text box: Cut / Copy / Paste / Select all (the app window has no built-in menu for this). */
+function textFieldMenu(el, x, y) {
+  const s0 = el.selectionStart ?? 0, s1 = el.selectionEnd ?? 0, has = s1 > s0, secret = el.type === "password";
+  const back = () => { el.focus(); try { el.setSelectionRange(s0, s1); } catch (err) { /* number inputs */ } };
+  const items = [];
+  if (!secret && !el.readOnly) items.push({ label: "Cut", icon: "edit", k: "Ctrl+X", fn: () => { back(); if (has) document.execCommand("cut"); } });
+  if (!secret) items.push({ label: "Copy", icon: "stack", k: "Ctrl+C", fn: () => { back(); if (has) document.execCommand("copy"); } });
+  if (!el.readOnly) items.push({ label: "Paste", icon: "check", k: "Ctrl+V", fn: async () => {
+    let text = "";
+    try { text = (await api.get("/api/clipboard")).text || ""; } catch (err) { /* nothing to paste */ }
+    back();
+    if (!text) return;
+    if (!document.execCommand("insertText", false, text)) {        // like typing (undo works); else set it directly
+      try { el.setRangeText(text, s0, s1, "end"); } catch (err) { el.value = el.value.slice(0, s0) + text + el.value.slice(s1); }
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  } });
+  items.push({ label: "Select all", icon: "grid", k: "Ctrl+A", fn: () => { el.focus(); el.select(); } });
+  showCtx(x, y, items);
+}
 
 /* ------------------------------------------------------------------ bulk bar */
 function renderBulkbar() {
@@ -2132,7 +2158,7 @@ async function renderSettings() {
       <div class="field"><label>MyAnimeList client ID <small>· adds MyAnimeList genres and themes (Ecchi, Gore, Horror…) to every series; only ever adds to the AniList data</small></label>
         <input id="s_mal" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your client ID (myanimelist.net ▸ Account Settings ▸ API)" value="${esc(st.mal_client_id || "")}">
         <div class="status-line" style="margin-top:6px"><span class="dotc ${!st.mal_client_id ? "mid" : b.mal && b.mal.error ? "bad" : ""}"></span>${!st.mal_client_id ? "MyAnimeList: not connected"
-          : b.mal && b.mal.error ? esc(b.mal.error) : `MyAnimeList: ${(b.mal ? b.mal.done : 0).toLocaleString()} of ${(b.mal ? b.mal.total : 0).toLocaleString()} series fetched${b.mal && b.mal.done < b.mal.total ? " (continues in the background)" : ""}`}</div></div>
+          : b.mal && b.mal.error ? esc(b.mal.error) : `MyAnimeList: ${(b.mal ? b.mal.done : 0).toLocaleString()} of ${(b.mal ? b.mal.total : 0).toLocaleString()} series done${b.mal && b.mal.waiting ? ` · ${b.mal.waiting} without genres yet (asked again in a month)` : ""}${b.mal && b.mal.done + (b.mal.waiting || 0) < b.mal.total ? " · continues in the background" : ""}`}</div></div>
       <label class="check-row"><input type="checkbox" id="s_ollama" ${st.ollama_enabled ? "checked" : ""}> Use Ollama for ambiguous filenames</label>
       <div class="field half"><label>Ollama URL</label><input id="s_ourl" value="${esc(st.ollama_url)}"></div>
       <div class="field half"><label>Ollama model</label>${ol.models.length ? `<select id="s_omodel"><option value="">First available</option>${ol.models.map((mm) => `<option ${mm === st.ollama_model ? "selected" : ""}>${esc(mm)}</option>`).join("")}</select>` : `<input id="s_omodel" value="${esc(st.ollama_model)}" placeholder="e.g. llama3.1:8b">`}</div>

@@ -454,12 +454,14 @@ class JobManager:
                 db.bump_library_version()
 
     def _job_fill_genres(self):
-        """Genres + tags from AniList for every series in the library (once; cached for 60 days)."""
+        """Genres + tags from AniList for every series in the library, once. genres_at > 0 = complete (never asked
+        again); < 0 = no genres/tags yet or unknown to AniList (asked again after 30 days); 0 = not asked yet."""
         import json as _json
         from .sources import anilist
         p = self.pipeline
-        rows = db.q("SELECT id, anilist_id, mal_id FROM anime WHERE genres_at=0 AND "
-                    "(anilist_id IS NOT NULL OR mal_id IS NOT NULL) AND id IN (SELECT anime_id FROM v_video)")
+        retry = -(time.time() - 30 * 86400)
+        rows = db.q("SELECT id, anilist_id, mal_id FROM anime WHERE (genres_at=0 OR (genres_at<0 AND genres_at>?)) AND "
+                    "(anilist_id IS NOT NULL OR mal_id IS NOT NULL) AND id IN (SELECT anime_id FROM v_video)", (retry,))
         if not rows:
             return
         p.set(phase="Fetching genres & tags (AniList)", done=0, total=len(rows), current="")
@@ -486,11 +488,12 @@ class JobManager:
                         if not aid:
                             continue
                         found.add(ext)
+                        g, t = m.get("genres") or [], anilist.clean_tags(m)
                         c.execute("UPDATE anime SET genres=?, tags=?, genres_at=? WHERE id=?",
-                                  (_json.dumps(m.get("genres") or []), _json.dumps(anilist.clean_tags(m)), now, aid))
+                                  (_json.dumps(g), _json.dumps(t), now if (g or t) else -now, aid))
                         changed.append(aid)
-                    for ext in set(chunk) - found:  # unknown to AniList: don't ask again every scan
-                        c.execute("UPDATE anime SET genres_at=? WHERE id=?", (now, mapping[ext]))
+                    for ext in set(chunk) - found:  # unknown to AniList: ask again in 30 days, not every scan
+                        c.execute("UPDATE anime SET genres_at=? WHERE id=?", (-now, mapping[ext]))
                 done += len(chunk)
                 p.set(done=done, current=f"{done}/{len(rows)} series")
         if changed:
