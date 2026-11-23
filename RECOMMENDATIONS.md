@@ -23,8 +23,9 @@ Status: **built.** This describes how it works.
 * New results never reshuffle the page being viewed: they are used the next time For You is opened (a *Show*
   link appears in the header). The scroll position is kept when nothing changed.
 * **History:** a menu next to *Teach For You* lists earlier rankings ("Today 14:05 · 120 liked"). Picking one shows
-  For You as it was then (songs liked since are still left out); *Back to latest* returns. One entry is kept per
-  set of ratings: the newest 15, then one per day for 60 days.
+  For You as it was then (songs liked since are still left out); *Back to latest* returns. History keeps
+  checkpoints, not every re-learn: while you keep rating, the newest entry is refreshed and a new one starts after
+  an hour; entries older than a day are thinned to one per day, kept for 60 days.
 * **Settings ▸ For You · your taste:** any number of liked folders (any drive, any video format, read-only);
   favourites can count as likes. A one-time **Install For You engine** button sets up the analysis engine.
 

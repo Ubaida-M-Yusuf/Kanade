@@ -952,16 +952,16 @@ function renderVideoGrid() {
     const nHidden = new Set(S.videos.filter((x) => x.rating === -1).map(songKey)).size;
     // what it learned from goes in the line under the title; the controls get their own row
     if (based) $("#viewSub").insertAdjacentHTML("beforeend", ` · <span class="fy-meta" title="${esc(basedTip)}">${nLoose ? `<a href="#" class="alink" data-fyloose="1">${esc(based)}</a>` : esc(based)}</span>`);
-    $("#viewActions").innerHTML = `<div class="seg fy-tabs" title="Recommendations, or the songs you rated">
+    $("#viewActions").innerHTML = `<div class="fy-bar"><div class="seg fy-tabs" title="Recommendations, or the songs you rated">
         <button data-fytab="rec" class="${S.fyTab === "rec" ? "on" : ""}">${icon("spark")}For you</button>
         <button data-fytab="liked" class="${S.fyTab === "liked" ? "on" : ""}">${icon("up")}Liked<b>${nLiked || ""}</b></button>
         <button data-fytab="hidden" class="${S.fyTab === "hidden" ? "on" : ""}">${icon("down")}Hidden<b>${nHidden || ""}</b></button></div>
       <div class="seg fy-mode" title="What “similar” means">
         <button data-mode-fy="mix" class="${S.recMode === "mix" ? "on" : ""}" title="Sound, the look of the video, the anime's genres and who sings it (most accurate)">${icon("op")}Sound + look + genre</button>
-        <button data-mode-fy="audio" class="${S.recMode !== "mix" ? "on" : ""}" title="Only how the songs sound">${icon("ed")}Sound</button></div>
+        <button data-mode-fy="audio" class="${S.recMode !== "mix" ? "on" : ""}" title="Only how the songs sound">${icon("ed")}Sound</button></div></div>
       <div class="fy-right">
       ${S.fyTab === "rec" && S.recHist.length > 1 ? `<select class="fy-hist${S.recHistAt ? " on" : ""}" id="fyHist" title="Look back: For You's picks from before you rated more songs">
-        <option value="">${S.recHistAt ? "Back to latest picks" : "Latest picks"}</option>
+        <option value="">${S.recHistAt ? "Back to latest picks" : "History: latest picks"}</option>
         ${S.recHist.slice(1).map((h) => `<option value="${h.at}" ${h.at === S.recHistAt ? "selected" : ""}>${esc(histWhen(h.at))} · ${h.liked.toLocaleString()} liked${h.note ? ` · ${esc(h.note)}` : ""}</option>`).join("")}</select>` : ""}
       ${S.fyTab === "rec" && S.rec.size ? `<button class="btn teach" data-fyteach="1" title="Rate your current top picks one by one (with sound): the fastest way to teach For You">${icon("spark")}Teach For You</button>` : ""}
       </div>`;

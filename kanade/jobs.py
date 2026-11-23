@@ -368,9 +368,10 @@ class JobManager:
         """Ecchi / 18+ ratings from AniList, Kitsu and AnimeThemes (once per series; 'all' refreshes)."""
         from . import content
         p = self.pipeline
-        p.set(phase="Content ratings (AniList, Kitsu, AnimeThemes)", done=0, total=0, current="")
         content.refresh(lambda d, t, m: p.set(done=d, total=t, current=m), only_missing=not all,
-                        should_stop=self._stop.is_set)
+                        should_stop=self._stop.is_set,
+                        on_start=lambda n: p.set(phase="Content ratings (AniList, Kitsu, AnimeThemes)",
+                                                 done=0, total=n, current=""))
 
     def _job_fill_relations(self, all=False):
         """Sequels / prequels / side stories from AniList, once per series (saved every 50 series). A new season
@@ -471,12 +472,15 @@ class JobManager:
     # ---------------------------------------------------------- steps
     def _match(self, ids):
         p = self.pipeline
-        p.set(phase="Identifying videos", done=0, total=0, current="")
         def covers_in_background():
             db.bump_library_version()
             threading.Thread(target=self._covers, kwargs={"quiet": True}, name="covers", daemon=True).start()
 
-        stats = matcher.match_pending(lambda d, t, m: p.set(done=d, total=t, current=m), only_ids=ids,
+        def progress(d, t, m):              # a progress bar only when there are videos to identify
+            if t:
+                p.set(phase="Identifying videos", done=d, total=t, current=m)
+
+        stats = matcher.match_pending(progress, only_ids=ids,
                                       stop_event=self._stop, after_offline=covers_in_background)
         log.info("matching: %s", stats)
         db.bump_library_version()

@@ -793,10 +793,15 @@ select.fy-hist.on { border-color: rgba(167,139,250,.7); background: rgba(167,139
 .loose .lt span { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .loose .lt span.muted2 { white-space: normal; }
 .loose .btn { flex: none; }
-/* For You header: title + subtitle, then one row of controls (same height, left to right; history + Teach on the right) */
-.view-head.fy { flex-direction: column; align-items: stretch; gap: 10px; }
-.view-head.fy > div:first-child { flex: none; }
-.view-head.fy .view-actions { justify-content: flex-start; align-items: center; }
-.view-head.fy .fy-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-.view-head.fy select.fy-hist { height: 38px; }
+/* For You header: title + subtitle with History and Teach beside it; the tabs and the mode switch on the row
+   below, right above the song-type chips */
+.view-head.fy { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title right" "bar bar";
+  column-gap: 20px; row-gap: 14px; align-items: center; padding-bottom: 10px; }
+.view-head.fy > div:first-child { grid-area: title; min-width: 0; }
+.view-head.fy .view-actions { display: contents; }
+.view-head.fy .fy-bar { grid-area: bar; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.view-head.fy .fy-right { grid-area: right; display: flex; gap: 8px; align-items: center; }
+select.fy-hist { height: 38px; border-radius: 10px; border: 1px solid var(--line-2); background-color: var(--surface);
+  padding: 0 30px 0 12px; font-size: 12.5px; font-weight: 600; color: var(--text-2); width: auto; max-width: 240px; }
+select.fy-hist:hover { color: var(--text); border-color: rgba(255,255,255,.18); }
 .view-sub .fy-meta { display: inline; white-space: normal; font-size: inherit; margin: 0; }

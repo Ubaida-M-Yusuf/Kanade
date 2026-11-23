@@ -86,18 +86,20 @@ CREATE TABLE rec(
 DROP TABLE IF EXISTS taste_group;
 CREATE TABLE taste_group(id INTEGER PRIMARY KEY, name TEXT, size INTEGER, members TEXT);
 """
-# earlier rankings, so the user can look back at the picks from before they rated more songs: one row per set of
-# ratings (a new ranking with the same ratings, e.g. after more videos were analysed, replaces the newest row)
+# earlier rankings, so the user can look back at the picks from before they rated more songs. Checkpoints, not every
+# re-learn: while the user keeps rating, the newest entry is refreshed; a new one starts once it is an hour old.
 HISTORY_SCHEMA = """
 CREATE TABLE IF NOT EXISTS rec_history(
     at REAL PRIMARY KEY,           -- when it was ranked
     liked INTEGER, disliked INTEGER,
     sig TEXT,                      -- fingerprint of the ratings it was learned from
     note TEXT,                     -- e.g. 'before the update'
-    ids BLOB, audio BLOB, mix BLOB -- int32 video ids; uint16 match x10 (sound only / sound + look + genre)
+    ids BLOB, audio BLOB, mix BLOB, -- int32 video ids; uint16 match x10 (sound only / sound + look + genre)
+    since REAL                     -- when this checkpoint started (it is refreshed for up to an hour)
 );
 """
-HISTORY_KEEP_RECENT, HISTORY_KEEP_DAYS = 15, 60
+HISTORY_STEP = 3600            # a new checkpoint at most every hour...
+HISTORY_KEEP_DAYS = 60         # ...older than a day: the last one of each day, for 60 days
 
 # ----------------------------------------------------------------------------- helpers
 
@@ -835,6 +837,26 @@ def ensure_rec_tables(eng: Engine):
     if not eng.db.execute("SELECT 1 FROM sqlite_master WHERE name='rec_history'").fetchone():
         eng.db.executescript(HISTORY_SCHEMA)
         _seed_history(eng)
+    elif "since" not in {r[1] for r in eng.db.execute("PRAGMA table_info(rec_history)")}:
+        eng.db.execute("ALTER TABLE rec_history ADD COLUMN since REAL")
+        _merge_history(eng)                                   # earlier versions kept every re-learn
+        eng.db.commit()
+
+
+def _merge_history(eng: Engine):
+    """Fold entries into hourly checkpoints (each keeps its last ranking)."""
+    start, prev, drop = None, None, []
+    for at, note in eng.db.execute("SELECT at, note FROM rec_history ORDER BY at").fetchall():
+        if note is not None:
+            start, prev = None, None
+            continue
+        if start is not None and at - start < HISTORY_STEP:
+            drop.append((prev,))
+        else:
+            start = at
+        prev = at
+        eng.db.execute("UPDATE rec_history SET since=? WHERE at=?", (start, at))
+    eng.db.executemany("DELETE FROM rec_history WHERE at=?", drop)
 
 
 def _seed_history(eng: Engine):
@@ -856,24 +878,28 @@ def _seed_history(eng: Engine):
     eng.db.commit()
 
 
-def _put_history(eng: Engine, at, liked, disliked, sig, note, ids, a, m):
+def _put_history(eng: Engine, at, liked, disliked, sig, note, ids, a, m, since=None):
     pack = lambda x: np.clip(np.round(np.asarray(x) * 10), 0, 1000).astype(np.uint16).tobytes()
-    eng.db.execute("INSERT OR REPLACE INTO rec_history(at,liked,disliked,sig,note,ids,audio,mix) VALUES(?,?,?,?,?,?,?,?)",
-                   (at, int(liked), int(disliked), sig, note, np.asarray(ids, np.int32).tobytes(), pack(a), pack(m)))
+    eng.db.execute("INSERT OR REPLACE INTO rec_history(at,liked,disliked,sig,note,ids,audio,mix,since) "
+                   "VALUES(?,?,?,?,?,?,?,?,?)",
+                   (at, int(liked), int(disliked), sig, note, np.asarray(ids, np.int32).tobytes(), pack(a), pack(m),
+                    since if since is not None else at))
 
 
 def save_history(eng: Engine, sig, liked, disliked, ids, a, m):
-    """Add this ranking to the history (part of the caller's transaction) and thin out old entries: the newest
-    HISTORY_KEEP_RECENT stay, older ones keep only the last ranking of each day, for HISTORY_KEEP_DAYS days."""
+    """Keep this ranking as a history checkpoint (part of the caller's transaction). While the user keeps rating,
+    the newest checkpoint is refreshed; a new one starts when it is HISTORY_STEP old. Checkpoints older than a day
+    are thinned to the last of each day; after HISTORY_KEEP_DAYS they go. 'Before the update' is never refreshed."""
     now = time.time()
-    last = eng.db.execute("SELECT at, sig FROM rec_history ORDER BY at DESC LIMIT 1").fetchone()
-    if last and last[1] == sig:
-        eng.db.execute("DELETE FROM rec_history WHERE at=?", (last[0],))     # same ratings: just a fresher ranking
-    _put_history(eng, now, liked, disliked, sig, None, ids, a, m)
-    rows = eng.db.execute("SELECT at FROM rec_history ORDER BY at DESC").fetchall()
+    last = eng.db.execute("SELECT at, sig, note, since FROM rec_history ORDER BY at DESC LIMIT 1").fetchone()
+    since = now
+    if last and last[2] is None and (last[1] == sig or now - (last[3] or last[0]) < HISTORY_STEP):
+        eng.db.execute("DELETE FROM rec_history WHERE at=?", (last[0],))     # refresh the current checkpoint
+        since = last[3] or last[0]
+    _put_history(eng, now, liked, disliked, sig, None, ids, a, m, since)
     seen_days, drop = set(), []
-    for i, (at,) in enumerate(rows):
-        if i < HISTORY_KEEP_RECENT:
+    for (at,) in eng.db.execute("SELECT at FROM rec_history ORDER BY at DESC").fetchall():
+        if at >= now - 86400:
             continue
         day = time.strftime("%Y-%m-%d", time.localtime(at))
         if at < now - HISTORY_KEEP_DAYS * 86400 or day in seen_days:

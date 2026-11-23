@@ -83,18 +83,31 @@ def _refresh_video_marks(rows) -> int:
 CHUNK = 200                      # series per saved step: a quit or a network failure loses at most one step
 
 
-def refresh(progress=None, only_missing: bool = True, should_stop=lambda: False) -> int:
+def _marks_signature() -> str:
+    """Changes when the catalogue mirror is re-synced or the library's videos / series change."""
+    r = db.q1("SELECT COUNT(*) n, MAX(id) mx, COUNT(DISTINCT anime_id) na, SUM(DISTINCT anime_id) sa FROM v_video")
+    return f"{db.meta_get('catalog_synced_at')}|{r['n']}|{r['mx']}|{r['na']}|{r['sa']}"
+
+
+def refresh(progress=None, only_missing: bool = True, should_stop=lambda: False, on_start=None) -> int:
     """Collect content ratings for series in the library, saving after every chunk of series.
 
     A series is marked done only when every source answered for it; if a source fails, what was
     collected is still shown, and the series is asked again on the next scan.
     """
-    every = db.q("SELECT id, at_id FROM anime WHERE id IN (SELECT anime_id FROM v_video)")
-    marked = _refresh_video_marks(every)
+    # per-video NSFW marks come from the local catalogue copy: redone only when it or the library changed
+    sig = _marks_signature()
+    marked = None
+    if sig != db.meta_get("content_marks_sig") or not only_missing:
+        every = db.q("SELECT id, at_id FROM anime WHERE id IN (SELECT anime_id FROM v_video)")
+        marked = _refresh_video_marks(every)
+        db.meta_set("content_marks_sig", sig)
     where = "content_at=0 AND " if only_missing else ""
     rows = db.q(f"SELECT id, at_id, anilist_id, mal_id FROM anime WHERE {where}id IN (SELECT anime_id FROM v_video) "
                 "ORDER BY id")
     total, done, updated = len(rows), 0, 0
+    if total and on_start:
+        on_start(total)                       # only now is there something to fetch (and a progress bar to show)
     for i in range(0, total, CHUNK):
         if should_stop():
             break
@@ -115,7 +128,9 @@ def refresh(progress=None, only_missing: bool = True, should_stop=lambda: False)
         if not complete:
             log.warning("content ratings: a source did not answer; the rest is retried on the next scan")
             break
-    log.info("content ratings updated for %s series (%s NSFW-marked videos)", updated, marked)
+    if total or marked is not None:
+        log.info("content ratings updated for %s series%s", updated,
+                 f" ({marked} NSFW-marked videos)" if marked is not None else "")
     return updated
 
 
