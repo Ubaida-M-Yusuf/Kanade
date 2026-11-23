@@ -567,8 +567,11 @@ function sortItems(items) {
   else if (s === "added") arr.sort((a, b) => (b.added || 0) - (a.added || 0) || byTitle(a, b));
   else if (s === "number") arr.sort((a, b) => cmpTheme(a, b) || byTitle(a, b));
   else if (s === "fav") arr.sort((a, b) => (b.fav_at || 0) - (a.fav_at || 0) || byTitle(a, b));
-  else if (s === "liked") { const at = new Map(); const get = (v) => { if (!at.has(v.id)) at.set(v.id, likedAt(v)); return at.get(v.id); };
-                            arr.sort((a, b) => get(b) - get(a) || byTitle(a, b)); }
+  else if (s === "liked" || s === "disliked") {
+    const f = s === "liked" ? likedAt : dislikedAt, at = new Map();
+    const get = (v) => { if (!at.has(v.id)) at.set(v.id, f(v)); return at.get(v.id); };
+    arr.sort((a, b) => get(b) - get(a) || byTitle(a, b));
+  }
   else arr.sort(byTitle);
   return arr;
 }
@@ -794,8 +797,9 @@ function setView(view, opts = {}) {
   S.view = view;
   if (opts.seriesId !== undefined) S.seriesId = opts.seriesId;
   // For You sorts by "Best match" by default; other views go back to the normal default
-  if (view === "foryou" && !wasForYou) { S.sortBeforeForYou = S.sort; setSort(S.fyTab === "liked" ? "liked" : "match"); }
-  else if (view !== "foryou" && wasForYou) { setSort(S.sort === "match" || S.sort === "liked" ? (S.sortBeforeForYou && !["match", "liked"].includes(S.sortBeforeForYou) ? S.sortBeforeForYou : "title") : S.sort); }
+  const fySorts = ["match", "liked", "disliked"];
+  if (view === "foryou" && !wasForYou) { S.sortBeforeForYou = S.sort; setSort(tabSort(S.fyTab) || "match"); }
+  else if (view !== "foryou" && wasForYou) { setSort(fySorts.includes(S.sort) ? (S.sortBeforeForYou && !fySorts.includes(S.sortBeforeForYou) ? S.sortBeforeForYou : "title") : S.sort); }
   S.sel.clear(); S.anchor = null;
   for (const a of $$("#nav a")) a.classList.toggle("active", a.dataset.view === (view === "anime" ? "series" : view));
   render(false);
@@ -983,9 +987,9 @@ function renderVideoGrid() {
         S.fyTabScroll[S.fyTab] = { top: scroller.scrollTop, sig: fySig() };
         const was = S.fyTab;
         S.fyTab = t.dataset.fytab; S.fyMemo = null;
-        if (S.fyTab === "liked" && S.sort === "match") setSort("liked");
-        else if (was === "liked" && S.sort === "liked") setSort("match");
-        else setSort(S.sort);                            // shows / hides "Date liked" for the new tab
+        // Best match or the previous tab's own sort -> the new tab's own sort; a sort the user chose is kept
+        if (S.sort === "match" || S.sort === tabSort(was)) setSort(tabSort(S.fyTab) || "match");
+        else setSort(S.sort);                            // shows / hides the tab-only sorts
         const m = S.fyTabScroll[S.fyTab];
         render(false);
         if (m && m.sig === fySig()) { scroller.scrollTop = m.top; paint(); }
@@ -2738,18 +2742,29 @@ function likedAt(v) {
   }
   return t;
 }
+/** When a song was disliked (the newest dislike of any of its versions). */
+function dislikedAt(v) {
+  let t = 0;
+  for (const x of songVideos(v)) if (x.rating === -1) t = Math.max(t, x.rating_at || 0);
+  return t;
+}
+// sorts that exist only on one For You tab: "Date liked" on Liked, "Date disliked" on Hidden (elsewhere nothing has
+// such a date, so they would just sort by name)
+const TAB_SORT = { liked: ["liked", "Date liked"], hidden: ["disliked", "Date disliked"] };
+const tabSort = (tab) => (TAB_SORT[tab] || [])[0];
 function setSort(s) {
   const sel = $("#sortSel");
-  // "Date liked" exists only in For You ▸ Liked (everything else has no like date, so it would just sort by name)
-  const likedTab = S.view === "foryou" && S.fyTab === "liked";
-  if (s === "liked" && !likedTab) s = S.view === "foryou" ? "match" : "title";
+  const tab = S.view === "foryou" ? S.fyTab : null;
+  for (const [t, [val]] of Object.entries(TAB_SORT)) if (s === val && tab !== t) s = S.view === "foryou" ? "match" : "title";
   if (s === "relevance" && !sel.querySelector('[value="relevance"]')) sel.insertAdjacentHTML("afterbegin", `<option value="relevance">Relevance</option>`);
   if (s !== "relevance") sel.querySelector('[value="relevance"]')?.remove();
   if ((s === "match" || S.view === "foryou") && !sel.querySelector('[value="match"]')) sel.insertAdjacentHTML("afterbegin", `<option value="match">Best match</option>`);
   if (s !== "match" && S.view !== "foryou") sel.querySelector('[value="match"]')?.remove();
-  const lo = sel.querySelector('[value="liked"]');
-  if (likedTab && !lo) (sel.querySelector('[value="match"]') || sel.firstElementChild).insertAdjacentHTML("afterend", `<option value="liked">Date liked</option>`);
-  if (!likedTab && lo) lo.remove();
+  for (const [t, [val, label]] of Object.entries(TAB_SORT)) {
+    const o = sel.querySelector(`[value="${val}"]`);
+    if (tab === t && !o) (sel.querySelector('[value="match"]') || sel.firstElementChild).insertAdjacentHTML("afterend", `<option value="${val}">${label}</option>`);
+    if (tab !== t && o) o.remove();
+  }
   S.sort = s; sel.value = s;
 }
 
