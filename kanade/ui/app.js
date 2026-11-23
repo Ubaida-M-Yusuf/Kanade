@@ -399,11 +399,12 @@ function renderFilterPanel() {
       body = `<div class="gsec">My MyAnimeList list</div>
         <div class="gpop-hint">Add your MyAnimeList profile link in <b>Settings ▸ Metadata sources</b> to filter by the anime
         you watched, are watching or plan to watch.</div>
-        <button class="btn sm" data-gact="settings">${icon("gear")}Open Settings</button>`;
+        <button class="btn sm" data-gact="settings">${icon("gear")}Add my profile</button>`;
     } else {
       const cnt = new Map();
       for (const a of S.anime) { const k = a.mal_status || "none"; cnt.set(k, (cnt.get(k) || 0) + 1); }
-      body = `<div class="gsec">My MyAnimeList list <small>· ${esc(ml.user)} · ${(ml.entries || 0).toLocaleString()} anime, ${(ml.in_library || 0).toLocaleString()} of them in your library</small></div>
+      body = `<div class="gsec">My MyAnimeList list <small>· ${esc(ml.user)} · ${(ml.entries || 0).toLocaleString()} anime, ${(ml.in_library || 0).toLocaleString()} of them in your library</small>
+        <button class="hlink inline" data-gact="settings">Change</button></div>
         ${ml.error ? `<div class="cp-warn">${esc(ml.error)}</div>` : ""}
         <div class="ggrid g3">${MAL_STATUSES.map(([k, label]) => filterChip("mylist", k, esc(label), cnt.get(k) || 0, f.mylist.has(k))).join("")}</div>
         <div class="gpop-hint">Series by their status on your list (tick several to combine them). Counts are series in your library.</div>`;
@@ -505,7 +506,11 @@ function onFilterClick(e) {
     renderFilterPanel(); applyGenreChange(); return true;
   }
   if (a && a.dataset.gact === "done") { toggleFilterPanel(false); return true; }
-  if (a && a.dataset.gact === "settings") { toggleFilterPanel(false); setView("settings"); return true; }
+  if (a && a.dataset.gact === "settings") {                  // to the MyAnimeList section of Settings
+    toggleFilterPanel(false); setView("settings");
+    const go = (n) => { const p = $("#malPanel"); if (p) { p.scrollIntoView({ block: "start" }); $("#s_maluser")?.focus(); } else if (n) setTimeout(() => go(n - 1), 150); };
+    go(20); return true;
+  }
   return false;
 }
 
@@ -2169,6 +2174,19 @@ async function renderSettings() {
     <div class="row-actions" style="margin-top:12px">${ei && (!ei.installed || !ei.models_ready) ? `<button class="btn primary" data-s="engine-setup">${icon("spark")}${ei.installed ? "Download missing models" : "Install AI engine and models"} (${fmtMB(ei.download_mb)})</button>` : ""}
       <button class="btn ${b.taste && b.taste.engine_ready ? "primary" : ""}" data-s="t-save">${icon("check")}Save folders &amp; analyse</button>
       ${b.taste && b.taste.engine_ready ? `<button class="btn" data-s="engine-analyze">${icon("refresh")}Re-analyse now</button>` : ""}</div></div>
+  <div class="panel" id="malPanel"><h3>MyAnimeList</h3><p class="desc">Paste your MyAnimeList profile link: your anime list (watching, completed, on hold, dropped, plan to watch) becomes a filter in <b>Filters ▸ My list</b>, on every page. The list must be public; no account or key is needed for this.</p>
+    <div class="form-grid">
+      <div class="field"><label>Your profile link</label>
+        <input id="s_maluser" autocomplete="off" spellcheck="false" placeholder="https://myanimelist.net/profile/yourname (or just the name)" value="${esc(st.mal_user || "")}">
+        <div class="status-line" style="margin-top:6px"><span class="dotc ${!st.mal_user ? "mid" : b.mal_list && b.mal_list.error ? "bad" : ""}"></span>${!st.mal_user ? "Not set (the list must be public)"
+          : b.mal_list && b.mal_list.error ? esc(b.mal_list.error) : b.mal_list && b.mal_list.at ? `${esc(st.mal_user)}: ${b.mal_list.entries.toLocaleString()} anime on the list, ${b.mal_list.in_library.toLocaleString()} of them in your library · updated ${new Date(b.mal_list.at * 1000).toLocaleString()}` : "Reading the list…"}
+          ${st.mal_user ? `<button class="hlink inline" data-s="mal-list-refresh">Refresh now</button>` : ""}</div></div>
+      <div class="field"><label>Client ID <small>· optional: adds MyAnimeList genres and themes (Ecchi, Gore, Horror…) to every series; only ever adds to the AniList data</small></label>
+        <input id="s_mal" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your client ID (myanimelist.net ▸ Account Settings ▸ API)" value="${esc(st.mal_client_id || "")}">
+        <div class="status-line" style="margin-top:6px"><span class="dotc ${!st.mal_client_id ? "mid" : b.mal && b.mal.error ? "bad" : ""}"></span>${!st.mal_client_id ? "MyAnimeList: not connected"
+          : b.mal && b.mal.error ? esc(b.mal.error) : `MyAnimeList: ${(b.mal ? b.mal.done : 0).toLocaleString()} of ${(b.mal ? b.mal.total : 0).toLocaleString()} series done${b.mal && b.mal.waiting ? ` · ${b.mal.waiting} without genres yet (asked again in a month)` : ""}${b.mal && b.mal.done + (b.mal.waiting || 0) < b.mal.total ? " · continues in the background" : ""}`}</div></div>
+    </div>
+    <div class="row-actions" style="margin-top:12px"><button class="btn primary" data-s="save">${icon("check")}Save</button></div></div>
   <div class="panel"><h3>Playback</h3><p class="desc">Double-click or Enter plays a video. Leave the VLC path empty to use VLC if it is installed in its usual place (Linux, macOS) or the system's default player for the file type.</p>
     <div class="form-grid">
       <div class="field"><label>VLC path (optional)</label><div class="inline"><input id="s_vlc" value="${esc(st.vlc_path)}" placeholder="C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"><button class="btn" data-s="pick-vlc">Browse…</button></div></div>
@@ -2181,15 +2199,6 @@ async function renderSettings() {
     <div class="form-grid" style="margin-top:14px">
       <label class="check-row"><input type="checkbox" id="s_anilist" ${st.use_anilist ? "checked" : ""}> Use AniList for search and missing titles</label>
       <label class="check-row"><input type="checkbox" id="s_jikan" ${st.use_jikan ? "checked" : ""}> Use Jikan (MyAnimeList) for search</label>
-      <div class="field"><label>MyAnimeList client ID <small>· adds MyAnimeList genres and themes (Ecchi, Gore, Horror…) to every series; only ever adds to the AniList data</small></label>
-        <input id="s_mal" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your client ID (myanimelist.net ▸ Account Settings ▸ API)" value="${esc(st.mal_client_id || "")}">
-        <div class="status-line" style="margin-top:6px"><span class="dotc ${!st.mal_client_id ? "mid" : b.mal && b.mal.error ? "bad" : ""}"></span>${!st.mal_client_id ? "MyAnimeList: not connected"
-          : b.mal && b.mal.error ? esc(b.mal.error) : `MyAnimeList: ${(b.mal ? b.mal.done : 0).toLocaleString()} of ${(b.mal ? b.mal.total : 0).toLocaleString()} series done${b.mal && b.mal.waiting ? ` · ${b.mal.waiting} without genres yet (asked again in a month)` : ""}${b.mal && b.mal.done + (b.mal.waiting || 0) < b.mal.total ? " · continues in the background" : ""}`}</div></div>
-      <div class="field"><label>Your MyAnimeList profile <small>· its anime list (watching, completed, plan to watch…) becomes a filter: Filters ▸ My list</small></label>
-        <input id="s_maluser" autocomplete="off" spellcheck="false" placeholder="https://myanimelist.net/profile/yourname (or just the name)" value="${esc(st.mal_user || "")}">
-        <div class="status-line" style="margin-top:6px"><span class="dotc ${!st.mal_user ? "mid" : b.mal_list && b.mal_list.error ? "bad" : ""}"></span>${!st.mal_user ? "Not set (the list must be public)"
-          : b.mal_list && b.mal_list.error ? esc(b.mal_list.error) : b.mal_list && b.mal_list.at ? `${esc(st.mal_user)}: ${b.mal_list.entries.toLocaleString()} anime on the list, ${b.mal_list.in_library.toLocaleString()} of them in your library · updated ${new Date(b.mal_list.at * 1000).toLocaleString()}` : "Reading the list…"}
-          ${st.mal_user ? `<button class="hlink inline" data-s="mal-list-refresh">Refresh now</button>` : ""}</div></div>
       <label class="check-row"><input type="checkbox" id="s_ollama" ${st.ollama_enabled ? "checked" : ""}> Use Ollama for ambiguous filenames</label>
       <div class="field half"><label>Ollama URL</label><input id="s_ourl" value="${esc(st.ollama_url)}"></div>
       <div class="field half"><label>Ollama model</label>${ol.models.length ? `<select id="s_omodel"><option value="">First available</option>${ol.models.map((mm) => `<option ${mm === st.ollama_model ? "selected" : ""}>${esc(mm)}</option>`).join("")}</select>` : `<input id="s_omodel" value="${esc(st.ollama_model)}" placeholder="e.g. llama3.1:8b">`}</div>
