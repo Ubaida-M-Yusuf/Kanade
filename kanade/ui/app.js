@@ -847,6 +847,7 @@ function showEmpty(n, html) {
     chips don't apply), else the score For You is showing. */
 function matchPill(r, overall = false) {
   const p = overall ? (S.recMode === "mix" ? r.m : r.a) : recScore(r);
+  if (!(p >= 0)) return "";                                 // no score: no badge (never a negative %)
   const tier = p >= 97 ? "hot" : p >= 85 ? "warm" : "";
   return `<span class="match ${tier}" title="Match with your taste">${Math.round(p)}%</span>`;
 }
@@ -2445,9 +2446,9 @@ function forYouSections(items) {
 
 /** The score the current mode and taste group give a video (0-100). */
 function recScore(r) {
+  // always the whole-taste score: a song type's own score is the same number for its songs (and -1 for every
+  // other song), so using it showed "-1%" on Liked / Hidden while a type chip was selected
   if (!r) return -1;
-  const g = S.recGroup;
-  if (g >= 0 && r.ga) return (S.recMode === "mix" ? r.gm : r.ga)[g] ?? -1;
   return S.recMode === "mix" ? r.m : r.a;
 }
 
