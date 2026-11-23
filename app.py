@@ -95,6 +95,12 @@ def show_window(url: str, debug: bool = False, pick_hook=True):
                 return None
             return res[0] if isinstance(res, (list, tuple)) else res
         server.pick_folder_hook = pick
+
+    def open_window(title, win_url):
+        # more windows of the same app (e.g. a series page): each page keeps its own view, filters and selection
+        webview.create_window(title, win_url, width=1360, height=880, min_size=(980, 620),
+                              background_color="#0b0d13", text_select=False)
+    server.open_window_hook = open_window
     # Windows: Edge WebView2. Elsewhere pywebview picks what is installed (Qt WebEngine or GTK WebKit on Linux,
     # WebKit on macOS)
     webview.start(gui="edgechromium" if sys.platform == "win32" else None, private_mode=False,

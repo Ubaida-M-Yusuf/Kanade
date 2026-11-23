@@ -954,6 +954,10 @@ def rank(eng: Engine):
     summary = {**mood_info, "liked_songs": int(len(pos)), "disliked_songs": int((y < 0).sum()),
                "twins": sum(1 for t in d.taste if t["twin"] is not None), "loose": len(loose),
                "loose_names": sorted(t["name"] for t in loose),     # liked files with no copy in the library
+               "loose_files": sorted(({"name": t["name"], "path": t["path"],
+                                       "closest": d.song_name[t["closest"]] if t.get("closest") is not None else None,
+                                       "sim": round(t.get("closest_sim", 0.0), 2)} for t in loose),
+                                     key=lambda x: x["name"].lower()),
                "songs": len(d.keys), "seconds": round(time.time() - t0, 2)}
     rated = sorted((str(d.keys[i]), int(y[i])) for i in np.where(y != 0)[0])     # what it learned from
     sig = hashlib.sha1(json.dumps([rated, len(loose)]).encode()).hexdigest()[:16]

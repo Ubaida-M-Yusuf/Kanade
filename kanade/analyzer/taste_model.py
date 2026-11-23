@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import sqlite3
 import time
@@ -50,6 +51,7 @@ PARAMS = {
     "twin_min": 0.60,                                    # centred MERT cosine to accept a named twin (measured: same
                                                          # recording 0.68-0.96, other songs of the series <= 0.44)
     "twin_audio_only": 0.93,                             # ... to accept a twin found by sound alone
+    "twin_titled": 0.75,                                 # ... by sound when the file name contains the series title
 }
 TAG_MIN_SERIES = 12           # tags used by fewer series are too rare to learn from
 YEAR_LO, YEAR_HI, YEAR_BIN = 1960, 2030, 3
@@ -83,6 +85,7 @@ class Data:
     mean: dict                            # library means per block (to centre liked files)
     song_meta: list = field(default_factory=list)
     song_artists: list = field(default_factory=list)   # set of lower-case artist names per song
+    song_title: list = field(default_factory=list)     # series title per song
     song_mood: np.ndarray = None          # (n_song, 527) AudioSet probabilities, NaN rows where not measured
     taste: list = field(default_factory=list)   # liked files: dict(path, name, A, C, V, clap, dsp, twin)
     video_rating: dict = field(default_factory=dict)   # video id -> (value, at)
@@ -181,6 +184,7 @@ def load(features_db: sqlite3.Connection, library_db: sqlite3.Connection, model_
 
     song_meta, song_name, song_anime, song_dsp = [None] * n, [""] * n, np.full(n, -1), [None] * n
     song_artists = [set() for _ in range(n)]
+    song_title = [""] * n
     for i, v in enumerate(vid):
         s = song_of[i]
         song_artists[s].update(split_artists(artists.get(int(v))))
@@ -194,6 +198,7 @@ def load(features_db: sqlite3.Connection, library_db: sqlite3.Connection, model_
             song_meta[s] = {"anime": aid if aid is not None else -1, "genres": g, "tags": t, "year": year,
                             "format": fmt, "type": typ}
             song_name[s] = f"{title} {typ or ''}{num or ''}{part or ''}".strip()
+            song_title[s] = title or ""
             song_anime[s] = aid if aid is not None else -1
             try:
                 song_dsp[s] = json.loads(lib[i][6]) if lib[i][6] else None
@@ -201,7 +206,8 @@ def load(features_db: sqlite3.Connection, library_db: sqlite3.Connection, model_
                 pass
     d = Data(vid=vid, song_of=song_of, keys=keys, A=songmean(Ac), C=songmean(Cc), V=songmean(Vc),
              M=_meta_matrix(song_meta), song_name=song_name, song_anime=song_anime,
-             song_clap_raw=songmean(l2(C)), song_dsp=song_dsp, mean=mean, song_meta=song_meta, song_artists=song_artists)
+             song_clap_raw=songmean(l2(C)), song_dsp=song_dsp, mean=mean, song_meta=song_meta, song_artists=song_artists,
+             song_title=song_title)
     # AudioSet class probabilities per song (mean of its versions; NaN where not measured)
     mood = np.full((n, 527), np.nan, np.float32)
     acc = {}
@@ -236,6 +242,24 @@ def load(features_db: sqlite3.Connection, library_db: sqlite3.Connection, model_
     return d
 
 
+_SEASON_WORDS = {"i", "ii", "iii", "iv", "v", "vi", "season", "the", "movie", "tv", "second", "third", "final", "2nd",
+                 "3rd", "4th", "s2", "s3"}
+
+
+def _squash(text):
+    return re.sub(r"[^0-9a-z]+", "", text.lower())
+
+
+def title_in_name(title, filename):
+    """Does a file name contain the series title? 'Mob Psycho 100 II' is found in 'mob psycho 100 2 op.webm',
+    'Hataraku Maou-sama!' in '[Group]_Hataraku_Maou_Sama_NCOP_v2.mkv'."""
+    words = re.sub(r"\([^)]*\)|\[[^]]*\]", " ", title.lower()).split()
+    while words and (words[-1] in _SEASON_WORDS or words[-1].isdigit()):
+        words.pop()
+    core = _squash(" ".join(words))
+    return len(core) >= 5 and core in _squash(filename)
+
+
 def find_twins(d: Data, p=PARAMS):
     """Liked file -> the library song that is the same opening (name candidates confirmed by sound)."""
     vid_index = {int(v): i for i, v in enumerate(d.vid)}
@@ -250,9 +274,13 @@ def find_twins(d: Data, p=PARAMS):
                 t["twin"] = int(cands[j])
                 t["twin_sim"] = float(sims[j])
                 continue
-        sims = d.A @ t["A"]                        # no name match: only an (almost) identical recording counts
+        # no name match: an (almost) identical recording, or the same recording of a series named in the file
+        # name (the app's name matching misses some fansub / YouTube names)
+        sims = d.A @ t["A"]
         j = int(np.argmax(sims))
-        if sims[j] >= p["twin_audio_only"]:
+        t["closest"], t["closest_sim"] = j, float(sims[j])
+        if sims[j] >= p["twin_audio_only"] or (
+                sims[j] >= p["twin_titled"] and d.song_title and title_in_name(d.song_title[j], os.path.basename(t["path"]))):
             t["twin"] = int(j)
             t["twin_sim"] = float(sims[j])
 

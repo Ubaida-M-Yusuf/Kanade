@@ -347,7 +347,7 @@ def meta_set(key: str, value):
 #   library -> structural changes (scan, matching, corrections): the UI reloads its lists
 #   media   -> thumbnails / durations / covers became available: the UI fetches a small delta
 #   fav     -> favourites changed (only invalidates the server-side list cache)
-_versions = {"library": time.time(), "media": time.time(), "fav": 0.0, "recs": time.time()}
+_versions = {"library": time.time(), "media": time.time(), "fav": 0.0, "recs": time.time(), "settings": 0.0}
 _vlock = threading.Lock()
 
 

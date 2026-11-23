@@ -193,6 +193,7 @@ def engine_status() -> dict:
                 st["liked_songs"] = summ.get("liked_songs")
                 st["loose"] = summ.get("loose", 0)
                 st["loose_names"] = summ.get("loose_names", [])
+                st["loose_files"] = [{**x, "exists": os.path.isfile(x["path"])} for x in summ.get("loose_files", [])]
             st["analysed"] = con.execute("SELECT COUNT(*) FROM feat WHERE kind='lib' AND audio IS NOT NULL").fetchone()[0]
         except sqlite3.Error:
             pass
@@ -243,6 +244,22 @@ def recommendations() -> dict:
         return {"rank_at": None, "rows": []}
     finally:
         con.close()
+
+
+def open_loose_file(path: str, action: str):
+    """Play, or show in its folder, a liked-folder file that has no copy in the library. Only files the last
+    ranking listed are accepted (the app never opens arbitrary paths for the page)."""
+    from . import library, osutil
+    st = engine_status()
+    known = {os.path.normcase(os.path.normpath(x["path"])) for x in st.get("loose_files", [])}
+    if os.path.normcase(os.path.normpath(path or "")) not in known:
+        raise ValueError("Unknown file")
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"File not found: {path}")
+    if action == "reveal":
+        osutil.reveal_file(path)
+    else:
+        library.play_path(path)
 
 
 def history() -> list:

@@ -77,7 +77,9 @@ class JobManager:
         return {"pipeline": self.pipeline.as_dict(), "thumbs": self.thumbs.as_dict(), "recs": self.recs.as_dict(),
                 "copy": self.copy.as_dict(),
                 "library_version": db.version("library"), "media_version": db.version("media"),
-                "recs_version": db.version("recs"), "last_scan": self.last_scan}
+                "recs_version": db.version("recs"), "last_scan": self.last_scan,
+                # other windows of the app use these to pick up likes / favourites and settings changed elsewhere
+                "fav_version": db.version("fav"), "settings_version": db.version("settings")}
 
     def request_recs(self, what: str = "analyze"):
         """Queue For You work if the engine is installed and there is something to learn from."""

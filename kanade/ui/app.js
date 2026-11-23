@@ -2,6 +2,13 @@
 "use strict";
 
 const TOKEN = document.querySelector('meta[name="kanade-token"]').content;
+// a second window opened at a series page: it starts from the saved preferences but never changes them, so closing
+// it leaves the main window (and the next start) exactly as they were; its filters live only in that window
+const CHILD_WINDOW = /series=\d+/.test(location.hash);
+function savePref(key, value) {
+  if (CHILD_WINDOW) return;
+  try { localStorage.setItem(key, value); } catch (e) { /* storage unavailable */ }
+}
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -424,16 +431,19 @@ function toggleFilterPanel(force) {
   if (open) { renderFilterPanel(); if (S.fTab === "tags") setTimeout(() => $("#gSearch")?.focus(), 30); }
 }
 
+/** A filter was added, changed or removed: show the result where the user is (a series page stays open). */
 function applyGenreChange() {
   updateGenreButton();
-  if (!isGridView() || S.view === "anime") setView("all");
+  if (!isGridView()) setView("all");
   else render(false);
 }
 
+/** Clicking a genre / tag: every video with it (from a series page, that means leaving the series). */
 function setGenre(g) {
   S.filters.genres = new Set(g ? [g] : []);
   S.filters.genreMode = "any";
-  applyGenreChange();
+  if (S.view === "anime") { updateGenreButton(); setView("all"); }
+  else applyGenreChange();
   if (g) toast(`Showing ${gLabel(g)} · use Clear to show everything again`);
 }
 
@@ -931,6 +941,7 @@ function renderVideoGrid() {
   } else {
     groups = [{ items }];
   }
+  $("#viewActions").parentElement.classList.toggle("fy", S.view === "foryou");   // For You: controls on their own row
   if (S.view === "foryou") {
     const t = S.recStatus || {};
     // liked songs in the library (the Liked tab) + liked-folder files that have no copy in the library
@@ -939,18 +950,21 @@ function renderVideoGrid() {
     const basedTip = nLoose ? `${nLoose} file${nLoose === 1 ? "" : "s"} in your liked folders ${nLoose === 1 ? "has" : "have"} no copy in your library, so ${nLoose === 1 ? "it isn't" : "they aren't"} in the Liked tab; For You still learns from how ${nLoose === 1 ? "it sounds" : "they sound"}:\n` + (t.loose_names || []).join("\n") : "";
     const nLiked = new Set(S.videos.filter(isLiked).map(songKey)).size;
     const nHidden = new Set(S.videos.filter((x) => x.rating === -1).map(songKey)).size;
-    $("#viewActions").innerHTML = `<span class="fy-meta" title="${esc(basedTip)}">${esc(based)}</span>
-      ${S.fyTab === "rec" && S.recHist.length > 1 ? `<select class="fy-hist${S.recHistAt ? " on" : ""}" id="fyHist" title="Look back: For You's picks from before you rated more songs">
-        <option value="">${S.recHistAt ? "Back to latest picks" : "Latest picks"}</option>
-        ${S.recHist.slice(1).map((h) => `<option value="${h.at}" ${h.at === S.recHistAt ? "selected" : ""}>${esc(histWhen(h.at))} · ${h.liked.toLocaleString()} liked${h.note ? ` · ${esc(h.note)}` : ""}</option>`).join("")}</select>` : ""}
-      ${S.fyTab === "rec" && S.rec.size ? `<button class="btn teach" data-fyteach="1" title="Rate your current top picks one by one (with sound): the fastest way to teach For You">${icon("spark")}Teach For You</button>` : ""}
-      <div class="seg fy-tabs" title="Recommendations, or the songs you rated">
+    // what it learned from goes in the line under the title; the controls get their own row
+    if (based) $("#viewSub").insertAdjacentHTML("beforeend", ` · <span class="fy-meta" title="${esc(basedTip)}">${nLoose ? `<a href="#" class="alink" data-fyloose="1">${esc(based)}</a>` : esc(based)}</span>`);
+    $("#viewActions").innerHTML = `<div class="seg fy-tabs" title="Recommendations, or the songs you rated">
         <button data-fytab="rec" class="${S.fyTab === "rec" ? "on" : ""}">${icon("spark")}For you</button>
         <button data-fytab="liked" class="${S.fyTab === "liked" ? "on" : ""}">${icon("up")}Liked<b>${nLiked || ""}</b></button>
         <button data-fytab="hidden" class="${S.fyTab === "hidden" ? "on" : ""}">${icon("down")}Hidden<b>${nHidden || ""}</b></button></div>
       <div class="seg fy-mode" title="What “similar” means">
         <button data-mode-fy="mix" class="${S.recMode === "mix" ? "on" : ""}" title="Sound, the look of the video, the anime's genres and who sings it (most accurate)">${icon("op")}Sound + look + genre</button>
-        <button data-mode-fy="audio" class="${S.recMode !== "mix" ? "on" : ""}" title="Only how the songs sound">${icon("ed")}Sound</button></div>`;
+        <button data-mode-fy="audio" class="${S.recMode !== "mix" ? "on" : ""}" title="Only how the songs sound">${icon("ed")}Sound</button></div>
+      <div class="fy-right">
+      ${S.fyTab === "rec" && S.recHist.length > 1 ? `<select class="fy-hist${S.recHistAt ? " on" : ""}" id="fyHist" title="Look back: For You's picks from before you rated more songs">
+        <option value="">${S.recHistAt ? "Back to latest picks" : "Latest picks"}</option>
+        ${S.recHist.slice(1).map((h) => `<option value="${h.at}" ${h.at === S.recHistAt ? "selected" : ""}>${esc(histWhen(h.at))} · ${h.liked.toLocaleString()} liked${h.note ? ` · ${esc(h.note)}` : ""}</option>`).join("")}</select>` : ""}
+      ${S.fyTab === "rec" && S.rec.size ? `<button class="btn teach" data-fyteach="1" title="Rate your current top picks one by one (with sound): the fastest way to teach For You">${icon("spark")}Teach For You</button>` : ""}
+      </div>`;
     const hs = $("#fyHist");
     if (hs) hs.onchange = () => viewRecHistory(hs.value ? Number(hs.value) : null);
     $("#viewActions").onclick = (e) => {
@@ -971,7 +985,7 @@ function renderVideoGrid() {
       }
       const b = e.target.closest("[data-mode-fy]"); if (!b) return;
       S.recMode = b.dataset.modeFy;
-      try { localStorage.setItem("kanade.recmode2", S.recMode); } catch (err) { /* ignore */ }
+      savePref("kanade.recmode2", S.recMode);
       S.counts.foryou = forYouCount(); updateCounts();
       render(false);
     };
@@ -991,6 +1005,7 @@ function renderVideoGrid() {
 }
 $("#viewSub").addEventListener("click", (e) => {
   if (e.target.closest("[data-fyapply]")) { S.recHistAt = null; applyPendingRecs(); }
+  if (e.target.closest("[data-fyloose]")) { e.preventDefault(); openLooseFiles(); }
   const h = e.target.closest("[data-fyhist]"); if (h) viewRecHistory(null);
 });
 
@@ -1395,7 +1410,7 @@ async function rateSongs(cardIds, value, opts = {}) {
   S.counts.foryou = forYouCount(); updateCounts();
   if (S.focus != null && ids.includes(S.focus) && $("#details").classList.contains("open")) openDetails(S.focus);
   S.ratedSinceLearn++;
-  try { await api.post("/api/rate", { ids, value }); }
+  try { const r = await api.post("/api/rate", { ids, value }); if (r.fav_version) S.favVersion = r.fav_version; }
   catch (e) { toast("Could not save: " + e.message, true); return loadData(); }
   if (opts.quiet) return;
   const n = cardIds.length;
@@ -1634,7 +1649,7 @@ async function toggleFav(ids, on) {
     const b = cardEl(id)?.querySelector(".fav"); if (b && on) b.classList.add("pop");
   }
   S.counts.favs = S.videos.filter((v) => v.fav).length; updateCounts();
-  try { await api.post("/api/favorite", { ids, on }); }
+  try { const r = await api.post("/api/favorite", { ids, on }); if (r.fav_version) S.favVersion = r.fav_version; }
   catch (e) { toast("Could not save favorite: " + e.message, true); loadData(); }
   if (S.view === "fav" || S.filters.fav) setTimeout(() => render(true), 250);
 }
@@ -1739,7 +1754,7 @@ canvas.addEventListener("click", (e) => {
   const act = e.target.closest("[data-act]");
   if (act) return heroAction(act.dataset.act);
   const tg = e.target.closest(".hlink[data-tg]");
-  if (tg) { S.recGroup = Number(tg.dataset.tg); S.groupExpanded = false; try { localStorage.setItem("kanade.recgroup2", String(S.recGroup)); } catch (err) { /* ignore */ } scroller.scrollTop = 0; render(false); return; }
+  if (tg) { S.recGroup = Number(tg.dataset.tg); S.groupExpanded = false; savePref("kanade.recgroup2", String(S.recGroup)); scroller.scrollTop = 0; render(false); return; }
   const go = e.target.closest("[data-goanime]");
   if (go) { const gid = Number(go.dataset.goanime); if (gid !== S.seriesId) setView("anime", { seriesId: gid }); return; }
   const p = e.target.closest(".poster");
@@ -1778,7 +1793,8 @@ canvas.addEventListener("contextmenu", (e) => {
   const p = e.target.closest(".poster");
   if (!c && !p) return;
   e.preventDefault();
-  if (p) return showCtx(e.clientX, e.clientY, [{ label: "Open series", icon: "series", fn: () => setView("anime", { seriesId: Number(p.dataset.anime) }) }]);
+  if (p) return showCtx(e.clientX, e.clientY, [{ label: "Open series", icon: "series", fn: () => setView("anime", { seriesId: Number(p.dataset.anime) }) },
+                                               { label: "Open series in a new window", icon: "series", fn: () => openSeriesWindow(Number(p.dataset.anime)) }]);
   const id = Number(c.dataset.id);
   if (!S.sel.has(id)) { S.sel = new Set([id]); S.focus = id; S.anchor = id; refreshSelectionClasses(); }
   const ids = [...S.sel];
@@ -1788,6 +1804,7 @@ canvas.addEventListener("contextmenu", (e) => {
   const items = [];
   if (!many) items.push({ label: "Play", icon: "play", k: "Enter", fn: () => play(id) });
   if (!many && v && v.anime_id && S.view !== "anime") items.push({ label: "Open series page", icon: "series", fn: () => setView("anime", { seriesId: v.anime_id }) });
+  if (!many && v && v.anime_id) items.push({ label: "Open series in a new window", icon: "series", fn: () => openSeriesWindow(v.anime_id) });
   if (!many && songVideos(v).length > 1) items.push({ label: `Show all ${songVideos(v).length} versions`, icon: "stack", fn: () => openVersions(id) });
   if (!many) items.push({ label: "View details", icon: "info", fn: () => { S.focus = id; refreshSelectionClasses(); openDetails(id); } });
   if (!many) items.push({ label: "Open containing folder", icon: "folder", fn: () => reveal(id) });
@@ -2373,7 +2390,7 @@ $("#tasteBar").addEventListener("click", async (e) => {
   const c = e.target.closest("[data-tg]");
   if (c) {
     S.recGroup = Number(c.dataset.tg); S.groupExpanded = false;
-    try { localStorage.setItem("kanade.recgroup2", String(S.recGroup)); } catch (err) { /* ignore */ }
+    savePref("kanade.recgroup2", String(S.recGroup));
     render(false); return;
   }
   if (e.target.closest("[data-tmore]")) { S.groupExpanded = !S.groupExpanded; renderTasteBar(); }
@@ -2405,6 +2422,36 @@ function applyRecs(d) {
   S.counts.foryou = forYouCount();
   updateCounts();
   loadRecHistory();
+}
+
+/* ------------------------------------------------------------------ liked files without a library copy */
+/** Files in the liked folders that For You couldn't find in the library (soundtracks, promo videos, insert songs,
+    or openings the library doesn't have): For You still learns from their sound. Play or show each one. */
+function openLooseFiles() {
+  const files = (S.recStatus || {}).loose_files || [];
+  const m = $("#modal");
+  const why = (f) => f.closest && f.sim >= 0.68 ? `Sounds a lot like <b>${esc(f.closest)}</b> (${Math.round(f.sim * 100)}% similar), but the name didn't confirm it is the same song`
+    : `Not in your library. Closest song by sound: ${esc(f.closest || "none")} (${Math.round((f.sim || 0) * 100)}% similar, a different song)`;
+  m.classList.add("setupm");
+  m.innerHTML = `<div class="modal-head"><div><h3>${icon("folder")} Liked files not in your library</h3>
+      <div class="sub">For You learns from how these sound, but they have no copy in your library, so they aren't in the Liked tab.
+      Usually they are soundtracks, promo videos or insert songs (not openings or endings), or a theme your library doesn't have.</div></div>
+      <button class="icon-btn" data-lx="close" title="Close (Esc)">${icon("x")}</button></div>
+    <div class="modal-body sp">
+      ${files.length ? files.map((f, i) => `<div class="loose">
+        <div class="lt"><b title="${esc(f.path)}">${esc(f.name)}</b><span>${esc(f.path.replace(/[\\/][^\\/]*$/, ""))}</span><span class="muted2">${why(f)}</span></div>
+        ${f.exists ? `<button class="btn sm" data-lx="play" data-i="${i}" title="Play in VLC">${icon("play")}Play</button>
+        <button class="btn sm" data-lx="reveal" data-i="${i}" title="Show the file in its folder">${icon("folder")}Show in folder</button>` : `<span class="cp-warn">File not found</span>`}
+      </div>`).join("") : `<div class="sp-need">Every liked file has a copy in your library.</div>`}
+    </div>`;
+  $("#modalWrap").classList.remove("hidden");
+  m.onclick = async (e) => {
+    const b = e.target.closest("[data-lx]"); if (!b) return;
+    if (b.dataset.lx === "close") return closeModal();
+    const f = files[Number(b.dataset.i)]; if (!f) return;
+    try { await api.post("/api/foryou/loose-open", { path: f.path, action: b.dataset.lx }); }
+    catch (err) { toast(err.message, true); }
+  };
 }
 
 /* ------------------------------------------------------------------ For You history (earlier rankings) */
@@ -2483,6 +2530,22 @@ function jobHTML(name, j) {
     ${j.state === "running" ? `<div class="bar ${j.total ? "" : "indet"}"><i style="width:${pct}%"></i></div>` : ""}</div>`;
 }
 let lastMsg = "";
+/** Likes / dislikes / favourites changed in another window of the app: update the cards here. */
+async function applyMarks() {
+  try {
+    const m = await api.get("/api/marks");
+    const rt = new Map(m.ratings.map(([id, val, at]) => [id, [val, at]])), fv = new Map(m.favs);
+    for (const v of S.videos) {
+      const r = rt.get(v.id);
+      v.rating = r ? r[0] : null; v.rating_at = r ? r[1] : null;
+      v.fav = fv.has(v.id) ? 1 : 0; v.fav_at = fv.has(v.id) ? fv.get(v.id) : null;
+    }
+    S.counts.favs = S.videos.filter((v) => v.fav).length;
+    S.counts.foryou = forYouCount(); updateCounts();
+    if (isGridView()) render(true);
+  } catch (e) { /* next poll */ }
+}
+
 async function poll() {
   try {
     const st = await api.get("/api/status");
@@ -2494,6 +2557,13 @@ async function poll() {
     if (st.recs_version !== S.recVersion || (recWasRunning && st.recs.state !== "running")) { S.recVersion = st.recs_version; loadRecs(); }
     else if (S.view === "foryou" && !S.rec.size && isGridView()) render(true);
     if (S.boot) S.boot.status = st;
+    if (S.favVersion === undefined) S.favVersion = st.fav_version;
+    else if (st.fav_version !== S.favVersion && S.videos.length) { S.favVersion = st.fav_version; await applyMarks(); }
+    if (S.settingsVersion === undefined) S.settingsVersion = st.settings_version;
+    else if (st.settings_version !== S.settingsVersion) {
+      S.settingsVersion = st.settings_version;
+      if (S.view !== "settings") api.get("/api/bootstrap").then((b) => { S.boot = b; S.settings = b.settings; }).catch(() => {});
+    }
     const msg = st.pipeline.message;
     if (msg && msg !== lastMsg && st.pipeline.state !== "running" && /unreachable|failed/i.test(msg)) toast(msg, true);
     lastMsg = msg;
@@ -2619,7 +2689,7 @@ $("#stackBtn").classList.toggle("on", S.stack);
 $("#stackBtn").addEventListener("click", () => {
   S.stack = !S.stack;
   $("#stackBtn").classList.toggle("on", S.stack);
-  try { localStorage.setItem("kanade.stack", S.stack ? "1" : "0"); } catch (e) { /* ignore */ }
+  savePref("kanade.stack", S.stack ? "1" : "0");
   toast(S.stack ? "Versions of the same song are grouped into one card" : "Every version shown as its own card");
   render(false);
 });
@@ -2632,7 +2702,7 @@ function setCardSize(step) {
   if (next === S.size) return;
   animateLayout(() => {
     S.size = next;
-    try { localStorage.setItem("kanade.size", S.size); } catch (e) { /* storage unavailable */ }
+    savePref("kanade.size", S.size);
   }, S.focus);
 }
 $("#sizeRange").value = String(SIZE_STEPS.indexOf(S.size));
@@ -2682,6 +2752,14 @@ document.addEventListener("keydown", (e) => {
 });
 
 /* ------------------------------------------------------------------ boot */
+/** A series page in its own window (own filters, selection and scroll; the main window stays as it is). */
+async function openSeriesWindow(animeId) {
+  try {
+    const r = await api.post("/api/window", { series: animeId });
+    if (r.url) window.open(r.url, "_blank");
+  } catch (err) { toast(err.message, true); }
+}
+
 (async function boot() {
   for (const x of $$("#typeSeg button")) x.classList.toggle("on", x.dataset.type === "");
   try { S.boot = await api.get("/api/bootstrap"); }
@@ -2694,9 +2772,16 @@ document.addEventListener("keydown", (e) => {
     setView("all", { noHistory: true });
     openWelcome();
   } else {
+    const deep = /series=(\d+)/.exec(location.hash);       // opened as a series window
     setView("all", { noHistory: true });
     await loadData(false);
     loadRecs();
+    if (deep) {
+      const id = Number(deep[1]);
+      setView("anime", { seriesId: id, noHistory: true });
+      const a = S.videos.find((x) => x.anime_id === id);
+      if (a) document.title = `${a.title} · Kanade`;
+    }
   }
   poll();
 })();

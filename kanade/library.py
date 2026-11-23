@@ -266,7 +266,10 @@ def _video_path(video_id: int, check: bool = True) -> str:
 
 def play(video_id: int):
     # no extra disk check here: VLC opens the file right away (a spinning-up disk would be hit twice)
-    path = _video_path(video_id, check=False)
+    play_path(_video_path(video_id, check=False))
+
+
+def play_path(path: str):
     vlc = settings().get("vlc_path")
     if not (vlc and os.path.isfile(vlc)) and not osutil.IS_WINDOWS:
         vlc = osutil.find_vlc()                  # Linux / macOS: VLC if installed, else the default player

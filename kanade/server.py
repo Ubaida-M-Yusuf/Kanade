@@ -29,6 +29,8 @@ log = logging.getLogger("kanade.server")
 TOKEN = secrets.token_urlsafe(24)
 UI_DIR = resource_dir() / "ui"
 pick_folder_hook = None  # set by app.py when running inside pywebview
+open_window_hook = None  # set by app.py: open another app window at a URL (title, url)
+base_url = ""            # this server's address, e.g. http://127.0.0.1:52811/
 last_api_request = 0.0  # used by --exit-when-idle to know whether a window is still open
 
 mimetypes.add_type("video/webm", ".webm")
@@ -121,6 +123,11 @@ def api_get(path: str, qs: dict):
     if path == "/api/foryou/history":
         at = g("at")
         return recommend.history_ranking(float(at)) if at else {"rows": recommend.history()}
+    if path == "/api/marks":
+        # likes / dislikes and favourites only (small): lets another window catch up without reloading everything
+        return {"version": db.version("fav"),
+                "ratings": [[r[0], r[1], r[2]] for r in db.q("SELECT video_id, value, at FROM rating")],
+                "favs": [[r[0], r[1]] for r in db.q("SELECT video_id, added_at FROM favorite")]}
     if path == "/api/media-updates":
         return media_updates(float(g("since", "0") or 0))
     if path == "/api/anime":
@@ -165,7 +172,7 @@ def api_post(path: str, body: dict):
         library.set_favorite(_ids(body), bool(body.get("on", True)))
         db.bump("fav")
         jm.taste_changed()
-        return {"ok": True}
+        return {"ok": True, "fav_version": db.version("fav")}
     if path == "/api/rate":
         value = int(body.get("value", 0))
         if value not in (1, -1, 0):
@@ -173,7 +180,7 @@ def api_post(path: str, body: dict):
         library.set_rating(_ids(body), value)
         db.bump("fav")
         jm.taste_changed()
-        return {"ok": True}
+        return {"ok": True, "fav_version": db.version("fav")}
     if path == "/api/foryou/learn":
         return {"learning": jm.taste_changed(immediate=True)}
     if path in ("/api/copy/plan", "/api/copy/start"):
@@ -185,6 +192,25 @@ def api_post(path: str, body: dict):
             return jm.start_copy(_ids(body), str(body.get("dest") or ""))
         except ValueError as e:
             raise ApiError(str(e))
+    if path == "/api/window":
+        # another window of the app, opened at a series page; it has its own filters and selection
+        aid = int(body["series"])
+        row = db.q1("SELECT title FROM v_video WHERE anime_id=? LIMIT 1", (aid,))
+        title = f"{row['title']} · {APP_NAME}" if row and row["title"] else APP_NAME
+        url = f"{base_url}#series={aid}"
+        if open_window_hook is None:
+            return {"url": url}            # in a browser: the page opens a new tab itself
+        open_window_hook(title, url)
+        return {"ok": True}
+    if path == "/api/foryou/loose-open":
+        action = str(body.get("action") or "play")
+        if action == "play":
+            activity.touch_play()
+        try:
+            recommend.open_loose_file(str(body.get("path") or ""), action)
+        except ValueError as e:
+            raise ApiError(str(e))
+        return {"ok": True}
     if path == "/api/play":
         activity.touch_play()
         library.play(int(body["id"]))
@@ -207,6 +233,7 @@ def api_post(path: str, body: dict):
             raise ApiError("Folder not found: " + missing[0])
         settings().update({"taste_folders": folders,
                            "taste_use_favorites": bool(body.get("use_favorites", True))})
+        db.bump("settings")
         jm.request_recs("analyze")
         return {"ok": True, "status": recommend.engine_status()}
     if path == "/api/taste-group-name":
@@ -219,6 +246,7 @@ def api_post(path: str, body: dict):
         else:
             names.pop(key, None)            # empty name: back to the automatic one
         settings().update({"taste_group_names": names})
+        db.bump("settings")
         return {"ok": True}
     if path == "/api/engine/setup":
         jm.request_recs("setup")
@@ -271,6 +299,7 @@ def api_post(path: str, body: dict):
     if path == "/api/settings":
         before = settings().get("archive_root")
         settings().update(body or {})
+        db.bump("settings")
         if settings().get("archive_root") != before and settings().get("archive_root"):
             jm.submit("scan")
         return {"ok": True, "settings": settings().as_dict(), "tools": media.tools_status()}
@@ -478,5 +507,7 @@ def start(port: int | None = None) -> tuple[ThreadingHTTPServer, str]:
     httpd.daemon_threads = True
     threading.Thread(target=httpd.serve_forever, name="http", daemon=True).start()
     url = f"http://127.0.0.1:{port}/"
+    global base_url
+    base_url = url
     log.info("UI server at %s", url)
     return httpd, url
