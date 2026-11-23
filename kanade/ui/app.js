@@ -456,7 +456,7 @@ function clearAllFilters() {
                 content: { sug: "", exp: "", dark: "", nsfw: "" } };
   S.genreSearch = "";
   $("#q").value = ""; S.q = ""; S.searchIds = null; S.searchRank = null;
-  if (S.sort === "relevance") setSort("title");
+  if (S.sort === "relevance") applyUserSort();
   for (const x of $$("#typeSeg button")) x.classList.toggle("on", x.dataset.type === "");
   $("#yearSel").value = ""; $("#numSel").value = ""; $("#seriesFilter").value = ""; $("#seriesFilter").classList.remove("on");
   $("#favOnly").classList.remove("on");
@@ -796,10 +796,7 @@ function setView(view, opts = {}) {
   }
   S.view = view;
   if (opts.seriesId !== undefined) S.seriesId = opts.seriesId;
-  // For You sorts by "Best match" by default; other views go back to the normal default
-  const fySorts = ["match", "liked", "disliked"];
-  if (view === "foryou" && !wasForYou) { S.sortBeforeForYou = S.sort; setSort(tabSort(S.fyTab) || "match"); }
-  else if (view !== "foryou" && wasForYou) { setSort(fySorts.includes(S.sort) ? (S.sortBeforeForYou && !fySorts.includes(S.sortBeforeForYou) ? S.sortBeforeForYou : "title") : S.sort); }
+  applyUserSort();                                  // the user's last sort, where this page has it
   S.sel.clear(); S.anchor = null;
   for (const a of $$("#nav a")) a.classList.toggle("active", a.dataset.view === (view === "anime" ? "series" : view));
   render(false);
@@ -986,11 +983,8 @@ function renderVideoGrid() {
         // each tab keeps its own scroll position while its list hasn't changed (new picks reset it)
         S.fyTabScroll = S.fyTabScroll || {};
         S.fyTabScroll[S.fyTab] = { top: scroller.scrollTop, sig: fySig() };
-        const was = S.fyTab;
         S.fyTab = t.dataset.fytab; S.fyMemo = null;
-        // Best match or the previous tab's own sort -> the new tab's own sort; a sort the user chose is kept
-        if (S.sort === "match" || S.sort === tabSort(was)) setSort(tabSort(S.fyTab) || "match");
-        else setSort(S.sort);                            // shows / hides the tab-only sorts
+        applyUserSort();                                 // the user's last sort, or this tab's default
         const m = S.fyTabScroll[S.fyTab];
         render(false);
         if (m && m.sig === fySig()) { scroller.scrollTop = m.top; paint(); }
@@ -2722,7 +2716,7 @@ document.addEventListener("visibilitychange", () => { if (document.hidden && hov
 const runSearch = debounce(async () => {
   const q = $("#q").value.trim();
   S.q = q;
-  if (!q) { S.searchIds = null; S.searchRank = null; if (S.sort === "relevance") setSort("title"); render(false); return; }
+  if (!q) { S.searchIds = null; S.searchRank = null; if (S.sort === "relevance") applyUserSort(); render(false); return; }
   try {
     const r = await api.get("/api/search?q=" + encodeURIComponent(q));
     if ($("#q").value.trim() !== q) return;
@@ -2753,6 +2747,18 @@ function dislikedAt(v) {
 // such a date, so they would just sort by name)
 const TAB_SORT = { liked: ["liked", "Date liked"], hidden: ["disliked", "Date disliked"] };
 const tabSort = (tab) => (TAB_SORT[tab] || [])[0];
+
+// the user's last choice in the sort menu: used on every page where it exists (remembered across restarts)
+S.userSort = (() => { try { return localStorage.getItem("kanade.sort") || ""; } catch (e) { return ""; } })();
+const BASE_SORTS = ["title", "year_desc", "year_asc", "added", "number"];
+const defaultSort = () => (S.view === "foryou" ? tabSort(S.fyTab) || "match" : "title");
+const sortAvailable = (s) => BASE_SORTS.includes(s) || (S.view === "foryou" && (s === "match" || s === tabSort(S.fyTab)));
+/** Sort by the user's last choice where this page has it, else this page's default (a search keeps Relevance). */
+function applyUserSort() {
+  if (S.q && S.sort === "relevance") return setSort("relevance");
+  setSort(S.userSort && sortAvailable(S.userSort) ? S.userSort : defaultSort());
+}
+
 function setSort(s) {
   const sel = $("#sortSel");
   const tab = S.view === "foryou" ? S.fyTab : null;
@@ -2821,7 +2827,11 @@ $("#stackBtn").addEventListener("click", () => {
   render(false);
 });
 $("#favOnly").addEventListener("click", () => { S.filters.fav = !S.filters.fav; $("#favOnly").classList.toggle("on", S.filters.fav); render(false); });
-$("#sortSel").addEventListener("change", (e) => { S.sort = e.target.value; render(false); });
+$("#sortSel").addEventListener("change", (e) => {
+  S.sort = e.target.value;
+  if (S.sort !== "relevance") { S.userSort = S.sort; savePref("kanade.sort", S.sort); }   // remembered everywhere
+  render(false);
+});
 function setCardSize(step) {
   step = Math.max(0, Math.min(SIZE_STEPS.length - 1, step));
   const next = SIZE_STEPS[step];
