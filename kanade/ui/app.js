@@ -896,8 +896,8 @@ function renderVideoGrid() {
     parts.length = 0;
     if (S.fyTab === "rec") {
       const strong = items.reduce((n, v) => n + (recScore(S.rec.get(v.id)) >= 85 ? 1 : 0), 0);
-      parts.push(`<b>${strong.toLocaleString()}</b> strong matches (85%+)`);
-      parts.push(`${items.length.toLocaleString()} ${unit}s you haven't rated, best first${S.q ? ` · matching “${esc(S.q)}”` : ""}`);
+      parts.push(`<span title="Songs that match your taste 85% or more"><b>${strong.toLocaleString()}</b> strong matches</span>`);
+      parts.push(`<span title="Every ${unit} you haven't rated yet, best match first">${items.length.toLocaleString()} not rated yet</span>${S.q ? ` · matching “${esc(S.q)}”` : ""}`);
       if (prog.state === "running" && prog.total) parts.push(`analysis continues: ${(prog.total - prog.done).toLocaleString()} to go`);
     } else if (S.fyTab === "liked") {
       parts.push(`${items.length.toLocaleString()} ${unit}${items.length === 1 ? "" : "s"} you liked, favourited or have in your liked folders · For You learns from them`);
@@ -946,7 +946,7 @@ function renderVideoGrid() {
     const t = S.recStatus || {};
     // liked songs in the library (the Liked tab) + liked-folder files that have no copy in the library
     const nSongs = t.liked_songs ?? t.taste_count, nLoose = t.liked_songs != null ? (t.loose || 0) : 0;
-    const based = t.taste_count ? `Learned from ${nSongs.toLocaleString()} liked song${nSongs === 1 ? "" : "s"}${nLoose ? ` + ${nLoose} liked file${nLoose === 1 ? "" : "s"} not in your library` : ""}` : "";
+    const based = t.taste_count ? `learned from ${nSongs.toLocaleString()} liked song${nSongs === 1 ? "" : "s"}${nLoose ? ` + ${nLoose} file${nLoose === 1 ? "" : "s"} not in your library` : ""}` : "";
     const basedTip = nLoose ? `${nLoose} file${nLoose === 1 ? "" : "s"} in your liked folders ${nLoose === 1 ? "has" : "have"} no copy in your library, so ${nLoose === 1 ? "it isn't" : "they aren't"} in the Liked tab; For You still learns from how ${nLoose === 1 ? "it sounds" : "they sound"}:\n` + (t.loose_names || []).join("\n") : "";
     const nLiked = new Set(S.videos.filter(isLiked).map(songKey)).size;
     const nHidden = new Set(S.videos.filter((x) => x.rating === -1).map(songKey)).size;
@@ -961,7 +961,7 @@ function renderVideoGrid() {
         <button data-mode-fy="audio" class="${S.recMode !== "mix" ? "on" : ""}" title="Only how the songs sound">${icon("ed")}Sound</button></div></div>
       <div class="fy-right">
       ${S.fyTab === "rec" && S.recHist.length > 1 ? `<select class="fy-hist${S.recHistAt ? " on" : ""}" id="fyHist" title="Look back: For You's picks from before you rated more songs">
-        <option value="">${S.recHistAt ? "Back to latest picks" : "History: latest picks"}</option>
+        <option value="">${S.recHistAt ? "Back to latest" : "History"}</option>
         ${S.recHist.slice(1).map((h) => `<option value="${h.at}" ${h.at === S.recHistAt ? "selected" : ""}>${esc(histWhen(h.at))} · ${h.liked.toLocaleString()} liked${h.note ? ` · ${esc(h.note)}` : ""}</option>`).join("")}</select>` : ""}
       ${S.fyTab === "rec" && S.rec.size ? `<button class="btn teach" data-fyteach="1" title="Rate your current top picks one by one (with sound): the fastest way to teach For You">${icon("spark")}Teach For You</button>` : ""}
       </div>`;

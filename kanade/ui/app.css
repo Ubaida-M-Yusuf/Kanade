@@ -793,15 +793,16 @@ select.fy-hist.on { border-color: rgba(167,139,250,.7); background: rgba(167,139
 .loose .lt span { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .loose .lt span.muted2 { white-space: normal; }
 .loose .btn { flex: none; }
-/* For You header: title + subtitle with History and Teach beside it; the tabs and the mode switch on the row
-   below, right above the song-type chips */
-.view-head.fy { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title right" "bar bar";
-  column-gap: 20px; row-gap: 14px; align-items: center; padding-bottom: 10px; }
-.view-head.fy > div:first-child { grid-area: title; min-width: 0; }
-.view-head.fy .view-actions { display: contents; }
-.view-head.fy .fy-bar { grid-area: bar; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.view-head.fy .fy-right { grid-area: right; display: flex; gap: 8px; align-items: center; }
-select.fy-hist { height: 38px; border-radius: 10px; border: 1px solid var(--line-2); background-color: var(--surface);
-  padding: 0 30px 0 12px; font-size: 12.5px; font-weight: 600; color: var(--text-2); width: auto; max-width: 240px; }
+/* For You header: title + subtitle on the left, the controls on the right in one compact row (they wrap,
+   right-aligned and centred, only when the window is too narrow, e.g. with the details panel open) */
+.view-head.fy { align-items: center; padding-bottom: 10px; }
+.view-head.fy .view-actions { flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
+.view-head.fy .fy-bar, .view-head.fy .fy-right { display: flex; gap: 6px; align-items: center; }
+.view-head.fy .fy-right { order: -1; }
+.view-head.fy .seg { height: 32px; padding: 2px; border-radius: 9px; }
+.view-head.fy .seg button { padding: 0 9px; font-size: 12px; border-radius: 7px; }
+.view-head.fy .btn.teach { height: 32px; padding: 0 11px; font-size: 12px; border-radius: 9px; }
+select.fy-hist { height: 32px; border-radius: 9px; border: 1px solid var(--line-2); background-color: var(--surface);
+  padding: 0 22px 0 10px; font-size: 12px; font-weight: 600; color: var(--text-2); width: 112px; }
 select.fy-hist:hover { color: var(--text); border-color: rgba(255,255,255,.18); }
 .view-sub .fy-meta { display: inline; white-space: normal; font-size: inherit; margin: 0; }
