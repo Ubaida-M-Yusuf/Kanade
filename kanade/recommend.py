@@ -239,6 +239,43 @@ def recommendations() -> dict:
         con.close()
 
 
+def history() -> list:
+    """Earlier rankings, newest first: [{at, liked, disliked, note}] (the newest is the current one)."""
+    con = features_db()
+    if con is None:
+        return []
+    try:
+        if not con.execute("SELECT 1 FROM sqlite_master WHERE name='rec_history'").fetchone():
+            return []
+        return [{"at": at, "liked": lk, "disliked": dl, "note": note} for at, lk, dl, note in
+                con.execute("SELECT at, liked, disliked, note FROM rec_history ORDER BY at DESC")]
+    except sqlite3.Error:
+        return []
+    finally:
+        con.close()
+
+
+def history_ranking(at: float) -> dict:
+    """One earlier ranking: {at, rows: [[video_id, audio_pct, mix_pct], ...]}."""
+    from array import array
+    con = features_db()
+    if con is None:
+        return {"at": at, "rows": []}
+    try:
+        r = con.execute("SELECT ids, audio, mix FROM rec_history WHERE abs(at-?)<0.001", (float(at),)).fetchone()
+    except sqlite3.Error:
+        r = None
+    finally:
+        con.close()
+    if not r:
+        return {"at": at, "rows": []}
+    ids, a, m = array("i"), array("H"), array("H")
+    ids.frombytes(r[0]); a.frombytes(r[1]); m.frombytes(r[2])
+    if sys.byteorder != "little":
+        ids.byteswap(); a.byteswap(); m.byteswap()
+    return {"at": at, "rows": [[i, x / 10, y / 10] for i, x, y in zip(ids, a, m)]}
+
+
 def import_engine_thumbs(since: float = 0.0) -> float:
     """Record the thumbnails the engine made (from frames it read for the analysis anyway) in the library.
     Returns the newest timestamp seen, to continue from next time."""

@@ -118,6 +118,9 @@ def api_get(path: str, qs: dict):
     if path == "/api/foryou":
         return {**recommend.recommendations(), "status": recommend.engine_status(),
                 "progress": manager().recs.as_dict()}
+    if path == "/api/foryou/history":
+        at = g("at")
+        return recommend.history_ranking(float(at)) if at else {"rows": recommend.history()}
     if path == "/api/media-updates":
         return media_updates(float(g("since", "0") or 0))
     if path == "/api/anime":

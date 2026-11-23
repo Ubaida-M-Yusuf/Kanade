@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import queue
@@ -85,6 +86,18 @@ CREATE TABLE rec(
 DROP TABLE IF EXISTS taste_group;
 CREATE TABLE taste_group(id INTEGER PRIMARY KEY, name TEXT, size INTEGER, members TEXT);
 """
+# earlier rankings, so the user can look back at the picks from before they rated more songs: one row per set of
+# ratings (a new ranking with the same ratings, e.g. after more videos were analysed, replaces the newest row)
+HISTORY_SCHEMA = """
+CREATE TABLE IF NOT EXISTS rec_history(
+    at REAL PRIMARY KEY,           -- when it was ranked
+    liked INTEGER, disliked INTEGER,
+    sig TEXT,                      -- fingerprint of the ratings it was learned from
+    note TEXT,                     -- e.g. 'before the update'
+    ids BLOB, audio BLOB, mix BLOB -- int32 video ids; uint16 match x10 (sound only / sound + look + genre)
+);
+"""
+HISTORY_KEEP_RECENT, HISTORY_KEEP_DAYS = 15, 60
 
 # ----------------------------------------------------------------------------- helpers
 
@@ -819,6 +832,54 @@ def ensure_rec_tables(eng: Engine):
     if have != {"video_id", "audio", "mix", "why_audio", "why_visual", "ga", "gm", "liked"} or \
             groups != {"id", "name", "size", "members"}:
         eng.db.executescript(REC_SCHEMA)
+    if not eng.db.execute("SELECT 1 FROM sqlite_master WHERE name='rec_history'").fetchone():
+        eng.db.executescript(HISTORY_SCHEMA)
+        _seed_history(eng)
+
+
+def _seed_history(eng: Engine):
+    """The first time: keep the ranking made before history existed, so it can be compared with the new one."""
+    rows = eng.db.execute("SELECT video_id, audio, mix FROM rec").fetchall() if         {r[1] for r in eng.db.execute("PRAGMA table_info(rec)")} >= {"video_id", "audio", "mix"} else []
+    if not rows:
+        return
+    at = eng.db.execute("SELECT value FROM meta WHERE key='rank_at'").fetchone()
+    summ = eng.db.execute("SELECT value FROM meta WHERE key='rank_summary'").fetchone()
+    try:
+        summ = json.loads(summ[0]) if summ else {}
+    except ValueError:
+        summ = {}
+    ids = np.array([r[0] for r in rows], np.int32)
+    a = np.array([r[1] or 0 for r in rows], np.float64)
+    m = np.array([r[2] or 0 for r in rows], np.float64)
+    _put_history(eng, float(at[0]) if at else time.time(), summ.get("liked_songs", 0) + summ.get("loose", 0), summ.get("disliked_songs", 0),
+                 "seed", "before the update", ids, a, m)
+    eng.db.commit()
+
+
+def _put_history(eng: Engine, at, liked, disliked, sig, note, ids, a, m):
+    pack = lambda x: np.clip(np.round(np.asarray(x) * 10), 0, 1000).astype(np.uint16).tobytes()
+    eng.db.execute("INSERT OR REPLACE INTO rec_history(at,liked,disliked,sig,note,ids,audio,mix) VALUES(?,?,?,?,?,?,?,?)",
+                   (at, int(liked), int(disliked), sig, note, np.asarray(ids, np.int32).tobytes(), pack(a), pack(m)))
+
+
+def save_history(eng: Engine, sig, liked, disliked, ids, a, m):
+    """Add this ranking to the history (part of the caller's transaction) and thin out old entries: the newest
+    HISTORY_KEEP_RECENT stay, older ones keep only the last ranking of each day, for HISTORY_KEEP_DAYS days."""
+    now = time.time()
+    last = eng.db.execute("SELECT at, sig FROM rec_history ORDER BY at DESC LIMIT 1").fetchone()
+    if last and last[1] == sig:
+        eng.db.execute("DELETE FROM rec_history WHERE at=?", (last[0],))     # same ratings: just a fresher ranking
+    _put_history(eng, now, liked, disliked, sig, None, ids, a, m)
+    rows = eng.db.execute("SELECT at FROM rec_history ORDER BY at DESC").fetchall()
+    seen_days, drop = set(), []
+    for i, (at,) in enumerate(rows):
+        if i < HISTORY_KEEP_RECENT:
+            continue
+        day = time.strftime("%Y-%m-%d", time.localtime(at))
+        if at < now - HISTORY_KEEP_DAYS * 86400 or day in seen_days:
+            drop.append((at,))
+        seen_days.add(day)
+    eng.db.executemany("DELETE FROM rec_history WHERE at=?", drop)
 
 
 def rank(eng: Engine):
@@ -893,7 +954,11 @@ def rank(eng: Engine):
     summary = {**mood_info, "liked_songs": int(len(pos)), "disliked_songs": int((y < 0).sum()),
                "twins": sum(1 for t in d.taste if t["twin"] is not None), "loose": len(loose),
                "songs": len(d.keys), "seconds": round(time.time() - t0, 2)}
+    rated = sorted((str(d.keys[i]), int(y[i])) for i in np.where(y != 0)[0])     # what it learned from
+    sig = hashlib.sha1(json.dumps([rated, len(loose)]).encode()).hexdigest()[:16]
+    vids = np.asarray(d.vid, np.int64)
     # swap in the new results in ONE transaction: if the engine is stopped mid-way, the previous list stays
+    save_history(eng, sig, len(pos) + len(loose), int((y < 0).sum()), vids, pa[d.song_of], pm[d.song_of])
     eng.db.execute("DELETE FROM rec")
     eng.db.execute("DELETE FROM taste_group")
     eng.db.executemany("INSERT INTO taste_group(id,name,size,members) VALUES(?,?,?,?)", groups)

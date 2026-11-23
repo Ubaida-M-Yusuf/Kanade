@@ -168,7 +168,7 @@ async function loadData(keepScroll = true) {
 /** For You's sidebar number: strong matches (85 %+), not every ranked video. */
 function forYouCount() {
   const rated = ratedSongs(), seen = new Set();
-  for (const [id, r] of S.rec) {
+  for (const [id, r] of (S.recLatest || S.rec)) {
     if ((S.recMode === "mix" ? r.m : r.a) < 85) continue;            // whole taste, current mode
     const v = S.byId.get(id); if (!v) continue;
     const k = songKey(v);
@@ -894,6 +894,11 @@ function renderVideoGrid() {
     } else {
       parts.push(`${items.length.toLocaleString()} ${unit}${items.length === 1 ? "" : "s"} you disliked · hidden from For You, and For You learns to avoid songs like them`);
     }
+    if (S.recHistAt && S.fyTab === "rec") {
+      const h = S.recHist.find((x) => x.at === S.recHistAt) || {};
+      parts.unshift(`<span class="histnote">${icon("clock")}Your picks as they were ${esc(histWhen(S.recHistAt, true))}${h.liked ? ` (learned from ${h.liked.toLocaleString()} liked songs${h.note ? `, ${esc(h.note)}` : ""})` : ""}</span>
+        <button class="hlink inline" data-fyhist="">Back to latest</button>`);
+    }
     if (S.pendingRec) parts.push(`<button class="hlink inline" data-fyapply="1">${icon("spark")}New picks from your likes · Show</button>`);
     setHead(VIEWS[S.view].title, parts.join(" · "));
   }
@@ -932,14 +937,19 @@ function renderVideoGrid() {
     const nLiked = new Set(S.videos.filter(isLiked).map(songKey)).size;
     const nHidden = new Set(S.videos.filter((x) => x.rating === -1).map(songKey)).size;
     $("#viewActions").innerHTML = `<span class="fy-meta">${esc(based)}</span>
+      ${S.fyTab === "rec" && S.recHist.length > 1 ? `<select class="fy-hist${S.recHistAt ? " on" : ""}" id="fyHist" title="Look back: For You's picks from before you rated more songs">
+        <option value="">${S.recHistAt ? "Back to latest picks" : "Latest picks"}</option>
+        ${S.recHist.slice(1).map((h) => `<option value="${h.at}" ${h.at === S.recHistAt ? "selected" : ""}>${esc(histWhen(h.at))} · ${h.liked.toLocaleString()} liked${h.note ? ` · ${esc(h.note)}` : ""}</option>`).join("")}</select>` : ""}
       ${S.fyTab === "rec" && S.rec.size ? `<button class="btn teach" data-fyteach="1" title="Rate your current top picks one by one (with sound): the fastest way to teach For You">${icon("spark")}Teach For You</button>` : ""}
       <div class="seg fy-tabs" title="Recommendations, or the songs you rated">
         <button data-fytab="rec" class="${S.fyTab === "rec" ? "on" : ""}">${icon("spark")}For you</button>
         <button data-fytab="liked" class="${S.fyTab === "liked" ? "on" : ""}">${icon("up")}Liked<b>${nLiked || ""}</b></button>
         <button data-fytab="hidden" class="${S.fyTab === "hidden" ? "on" : ""}">${icon("down")}Hidden<b>${nHidden || ""}</b></button></div>
       <div class="seg fy-mode" title="What “similar” means">
-        <button data-mode-fy="mix" class="${S.recMode === "mix" ? "on" : ""}" title="Sound, the look of the video and the anime's genres (most accurate)">${icon("op")}Sound + look + genre</button>
+        <button data-mode-fy="mix" class="${S.recMode === "mix" ? "on" : ""}" title="Sound, the look of the video, the anime's genres and who sings it (most accurate)">${icon("op")}Sound + look + genre</button>
         <button data-mode-fy="audio" class="${S.recMode !== "mix" ? "on" : ""}" title="Only how the songs sound">${icon("ed")}Sound</button></div>`;
+    const hs = $("#fyHist");
+    if (hs) hs.onchange = () => viewRecHistory(hs.value ? Number(hs.value) : null);
     $("#viewActions").onclick = (e) => {
       if (e.target.closest("[data-fyteach]")) return openTeach();
       const t = e.target.closest("[data-fytab]");
@@ -976,7 +986,10 @@ function renderVideoGrid() {
   buildRows(groups, "cards");
   showEmpty(items.length, emptyHTML());
 }
-$("#viewSub").addEventListener("click", (e) => { if (e.target.closest("[data-fyapply]")) applyPendingRecs(); });
+$("#viewSub").addEventListener("click", (e) => {
+  if (e.target.closest("[data-fyapply]")) { S.recHistAt = null; applyPendingRecs(); }
+  const h = e.target.closest("[data-fyhist]"); if (h) viewRecHistory(null);
+});
 
 function renderYearBar(folders) {
   const yb = $("#yearBar");
@@ -1365,10 +1378,11 @@ $("#details").addEventListener("click", async (e) => {
 /** Rate whole songs (all their versions). value: 1 like, -1 dislike (hidden from For You), 0 remove. */
 async function rateSongs(cardIds, value, opts = {}) {
   const ids = [...new Set(cardIds.flatMap((id) => songVideos(S.byId.get(id) || { id }).map((x) => x.id)))];
-  const before = ids.map((id) => [id, S.byId.get(id)?.rating || 0]);
+  const before = ids.map((id) => [id, S.byId.get(id)?.rating || 0, S.byId.get(id)?.rating_at || null]);
+  const now = Date.now() / 1000;          // the Liked tab sorts by this: a new like goes to the top straight away
   const hideNow = S.view === "foryou" && ((S.fyTab === "rec" && value !== 0) || (S.fyTab === "liked" && value !== 1) ||
                                           (S.fyTab === "hidden" && value !== -1));
-  const apply = () => { for (const id of ids) { const v = S.byId.get(id); if (v) v.rating = value; } };
+  const apply = () => { for (const id of ids) { const v = S.byId.get(id); if (v) { v.rating = value; v.rating_at = value ? now : null; } } };
   if (hideNow) {
     animateLayout(() => { apply(); render(true); });
   } else {
@@ -1386,8 +1400,7 @@ async function rateSongs(cardIds, value, opts = {}) {
   const msg = value === 1 ? `${what} liked · For You learns from it` : value === -1 ? `${what} hidden from For You · it learns to avoid songs like ${n > 1 ? "these" : "this"}`
                           : `${what}: rating removed`;
   toastAction(msg, "Undo", async () => {
-    const restore = new Map(before);
-    animateLayout(() => { for (const [id, r] of restore) { const v = S.byId.get(id); if (v) v.rating = r; } render(true); });
+    animateLayout(() => { for (const [id, r, at] of before) { const v = S.byId.get(id); if (v) { v.rating = r; v.rating_at = at; } } render(true); });
     S.counts.foryou = forYouCount(); updateCounts();
     for (const val of [1, -1, 0]) {
       const grp = before.filter(([, r]) => r === val).map(([id]) => id);
@@ -2272,6 +2285,10 @@ S.rec = new Map();          // video id -> {a: audio %, m: audio+visual %, wa, w
 S.recMode = (() => { try { return localStorage.getItem("kanade.recmode2") || "mix"; } catch (e) { return "mix"; } })();
 S.tasteDraft = [];
 S.recGroups = [];
+S.recHist = [];             // earlier rankings [{at, liked, disliked, note}], newest first
+S.recHistAt = null;        // showing an earlier ranking (its time), else the latest
+S.recHistRows = null;
+S.recLatest = null;
 S.recGroup = (() => { try { return Number(localStorage.getItem("kanade.recgroup2") ?? -1); } catch (e) { return -1; } })();
 S.groupExpanded = false;
 
@@ -2326,7 +2343,7 @@ function renderTasteBar() {
   bar.classList.toggle("hidden", !show);
   if (!show) return;
   const g = S.recGroup;
-  const chip = (i, label, n) => `<button class="tchip${g === i ? " on" : ""}" data-tg="${i}" title="${i >= 0 ? "Show only songs of this type, best match first · ✎ to rename" : "All song types"}">${i >= 0 ? `<i class="gdot" style="--g:${groupColor(i)}"></i>` : ""}${label}${n != null ? `<b>${n}</b>` : ""}${i >= 0 && g === i ? `<span class="tedit" data-tedit="${i}" title="Rename this group">✎</span>` : ""}</button>`;
+  const chip = (i, label, n) => `<button class="tchip${g === i ? " on" : ""}" data-tg="${i}" title="${i >= 0 ? `${n} of your liked songs are ${label}. Click to see every ${label} song in your library, best match first · ✎ to rename` : "All song types"}">${i >= 0 ? `<i class="gdot" style="--g:${groupColor(i)}"></i>` : ""}${label}${n != null ? `<b>${n} liked</b>` : ""}${i >= 0 && g === i ? `<span class="tedit" data-tedit="${i}" title="Rename this group">✎</span>` : ""}</button>`;
   const cur = g >= 0 ? S.recGroups[g] : null;
   const members = cur ? cur.members : [];
   const shown = S.groupExpanded ? members : members.slice(0, 6);
@@ -2376,13 +2393,62 @@ function applyRecs(d) {
   const m = new Map();
   const nums = (x) => (x ? x.split(",").map(Number) : null);
   for (const [id, a, mix, wa, wv, ga, gm, lf] of d.rows) m.set(id, { a, m: mix, wa, wv, ga: nums(ga), gm: nums(gm), lf: !!lf, la: lf || 0 });
-  S.rec = m;
+  S.recLatest = m;
+  S.rec = S.recHistAt && S.recHistRows ? historyMap(S.recHistRows) : m;
   S.recRankAt = d.rank_at;
   S.pendingRec = null;
   S.recGroups = d.groups || [];
   if (S.recGroup >= S.recGroups.length) S.recGroup = -1;
   S.counts.foryou = forYouCount();
   updateCounts();
+  loadRecHistory();
+}
+
+/* ------------------------------------------------------------------ For You history (earlier rankings) */
+function histWhen(at, long = false) {
+  const d = new Date(at * 1000), now = new Date();
+  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const days = Math.round((new Date(now.toDateString()) - new Date(d.toDateString())) / 86400000);
+  if (days === 0) return long ? `today at ${time}` : `Today ${time}`;
+  if (days === 1) return long ? `yesterday at ${time}` : `Yesterday ${time}`;
+  const day = d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}) });
+  return long ? `on ${day} at ${time}` : `${day}, ${time}`;
+}
+async function loadRecHistory() {
+  try {
+    const r = await api.get("/api/foryou/history");
+    const was = S.recHist.map((h) => h.at).join();
+    S.recHist = r.rows || [];
+    if (S.recHistAt && !S.recHist.some((h) => h.at === S.recHistAt)) viewRecHistory(null);   // thinned out meanwhile
+    else if (was !== S.recHist.map((h) => h.at).join() && S.view === "foryou" && isGridView()) render(true);
+  } catch (e) { /* older engine: no history */ }
+}
+/** A past ranking in the same shape as the latest one: song types and "liked" marks come from the latest. */
+function historyMap(rows) {
+  const m = new Map(), base = S.recLatest || new Map();
+  for (const [id, a, mix] of rows) {
+    const r = base.get(id) || { ga: null, gm: null, lf: false, la: 0 };
+    const t = r.ga ? r.ga.findIndex((x) => x >= 0) : -1;
+    m.set(id, { ...r, a, m: mix, wa: null, wv: null,
+      ga: r.ga ? r.ga.map((_, i) => (i === t ? a : -1)) : null, gm: r.gm ? r.gm.map((_, i) => (i === t ? mix : -1)) : null });
+  }
+  return m;
+}
+/** Show For You as it was at `at` (null: the latest picks). */
+async function viewRecHistory(at) {
+  if (at) {
+    try {
+      const r = await api.get(`/api/foryou/history?at=${encodeURIComponent(at)}`);
+      if (!r.rows || !r.rows.length) { toast("That earlier list is no longer available", true); return loadRecHistory(); }
+      S.recHistRows = r.rows; S.recHistAt = at; S.rec = historyMap(r.rows);
+    } catch (err) { toast(err.message, true); return; }
+  } else {
+    S.recHistAt = null; S.recHistRows = null; S.rec = S.recLatest || S.rec;
+  }
+  S.fyMemo = null;
+  if (S.fyTabScroll) delete S.fyTabScroll.rec;
+  scroller.scrollTop = 0;
+  render(false);
 }
 function applyPendingRecs() {
   if (!S.pendingRec) return;
@@ -2391,7 +2457,7 @@ function applyPendingRecs() {
   scroller.scrollTop = 0;
   render(false);
 }
-const fySig = () => [S.recRankAt, S.fyTab, S.recGroup, S.recMode, S.q, S.stack].join("|");
+const fySig = () => [S.recRankAt, S.recHistAt, S.fyTab, S.recGroup, S.recMode, S.q, S.stack].join("|");
 
 function renderTasteList() {
   const box = $("#t_list"); if (!box) return;

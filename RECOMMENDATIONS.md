@@ -16,11 +16,15 @@ Status: **built.** This describes how it works.
   anime's genres and tags. The choice is remembered.
 * **Song types:** every song is typed by its own sound as **Intense**, **Energetic**, **Mellow** or **Calm** (see
   below). *All my taste* shows the best matches of each type (two rows each, at most two songs per franchise) and
-  then everything; a type chip shows all matches of that type. Types can be renamed.
+  then everything; a type chip shows all matches of that type. The number on a chip is how many of the user's
+  liked songs are of that type (not how many songs the chip shows). Types can be renamed.
 * The details panel explains a match: the % by sound and by sound + look + genre, the song type, and which liked
   song it sounds and looks most like.
 * New results never reshuffle the page being viewed: they are used the next time For You is opened (a *Show*
   link appears in the header). The scroll position is kept when nothing changed.
+* **History:** a menu next to *Teach For You* lists earlier rankings ("Today 14:05 · 120 liked"). Picking one shows
+  For You as it was then (songs liked since are still left out); *Back to latest* returns. One entry is kept per
+  set of ratings: the newest 15, then one per day for 60 days.
 * **Settings ▸ For You · your taste:** any number of liked folders (any drive, any video format, read-only);
   favourites can count as likes. A one-time **Install For You engine** button sets up the analysis engine.
 
@@ -35,6 +39,7 @@ Everything works on **songs**: all versions, resolutions and creditless copies o
 | Song type | AudioSet classifier (`MIT/ast-finetuned-audioset-10-10-0.4593`, pinned revision) on the same windows |
 | Look | SigLIP 2 (`google/siglip2-base-patch16-224`), averaged over the six frames the thumbnail is chosen from (the same frames for liked files and library videos) |
 | Story | the anime's AniList genres and tags (rarer ones weigh more), release year and format, OP vs ED |
+| Artists | the singers / bands credited on the theme (sound + look + genre mode); a column for each artist of a rated song |
 
 1. **Centring.** Every embedding has the library's average subtracted before comparing. Raw music embeddings of
    any two openings look ~0.96 similar (they share one big common direction). Without centring, held-out
@@ -44,10 +49,12 @@ Everything works on **songs**: all versions, resolutions and creditless copies o
    by sound: the same recording scores 0.68–0.96, other songs of the same series ≤ 0.44, so 0.60 is the cut-off.
    The model then learns from the library copy, which sounds and looks like what it ranks. Liked files without a
    library copy still count through similarity.
-3. **Learned model.** A small regularised logistic regression over all four parts: liked songs (likes,
+3. **Learned model.** A small regularised logistic regression over all parts: liked songs (likes,
    favourites, library copies of liked files) are positives; disliked songs count against as strongly as a like
    counts for; every other song counts weakly against (most of a big library isn't to one person's taste). It
-   trains in about a second on the CPU.
+   trains in about a second on the CPU. Artists enter only through the songs that were rated: liking a song
+   makes other songs by the same singer or band rise, disliking one makes them sink. (Songs liked later share an
+   artist with an earlier like about three times as often as other songs do.)
 4. **Similarity.** Closeness to the 3 nearest liked songs (keeps different tastes apart and works from the very
    first like) minus closeness to the nearest disliked song.
 5. The score is a blend of 3 and 4, shown as a percentile within the library.
@@ -72,7 +79,13 @@ training and test at once; percentile among all songs not used for training, 100
 |---|---|---|---|
 | Previous version (raw similarity to liked files) | 31 | – | – |
 | Sound only (learned) | 76–80 | 15–20 % | 29–34 % |
-| Sound + look + genre (learned, default) | 94–95 | 47–49 % | 66–74 % |
+| Sound + look + genre (learned) | 94–96 | 47–55 % | 66–74 % |
+| Sound + look + genre + artists, more weight on genre and era (default) | 97 | 61 % | – |
+
+A second test replays the real order of ratings: the model is trained on the likes made before a point in time
+and the songs liked afterwards are looked up in its ranking (about 14,000 songs). With artists and the new
+weights, those later likes ranked at a median of about 440–490 instead of 620–750, and 1.5–2× as many of them
+were in the top 100. Liking top picks still only raises the remaining top picks.
 
 Favourites and likes weigh 3× a liked-folder file: favourites are often newer than liked folders, and without the
 extra weight held-out favourites ranked at a median of 71 instead of 81. Liking some of the top picks makes the

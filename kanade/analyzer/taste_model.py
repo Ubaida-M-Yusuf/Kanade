@@ -8,6 +8,9 @@ Everything works on SONGS (all versions / resolutions of one opening count once)
   * C: CLAP music embedding (genre / mood / vocals), centred the same way.
   * V: SigLIP 2 image embedding averaged over six frames (art style, colours, era of the animation).
   * M: the anime's genres and tags (weighted by rarity), release year and format, and OP vs ED.
+  * R: the singers / bands (sound + look + genre mode). Only artists of rated songs get a column, so a like makes
+    other songs by the same artist rise and a dislike makes them sink (measured on real later likes: songs liked
+    later share an artist with an earlier like three times as often as other songs do).
 
 Liked folders contain copies of openings that are usually also in the library (as AnimeThemes files): such a
 "twin" is found by name (done by the app: taste_match table) and confirmed by sound, and the library copy is used,
@@ -24,6 +27,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sqlite3
 import time
 from dataclasses import dataclass, field
@@ -32,9 +36,10 @@ import numpy as np
 
 # tuned on held-out liked songs (see RECOMMENDATIONS.md); the evaluation script lives with the engine tests
 PARAMS = {
-    "w_a": 1.0, "w_c": 0.6, "w_v": 1.0, "w_m": 0.8,     # block weights inside the learned model
+    "w_a": 1.0, "w_c": 0.6, "w_v": 1.0, "w_m": 1.2,     # block weights inside the learned model
+    "w_r": 2.0,                                          # artist block (sound + look + genre mode only)
     "w_explicit": 3.0,                                   # a like / favourite weighs this much more than a liked-folder file
-    "year_w": 0.6,                                       # weight of the release year inside the story block
+    "year_w": 1.0,                                       # weight of the release year inside the story block
     "lam": 3e-3,                                         # L2 strength of the learned model
     "unl_ratio": 1.0,                                    # total weight of unrated songs vs liked songs
     "neg_w": 3.0,                                        # weight of one dislike (as strong as a like in the app)
@@ -77,11 +82,22 @@ class Data:
     song_dsp: list
     mean: dict                            # library means per block (to centre liked files)
     song_meta: list = field(default_factory=list)
+    song_artists: list = field(default_factory=list)   # set of lower-case artist names per song
     song_mood: np.ndarray = None          # (n_song, 527) AudioSet probabilities, NaN rows where not measured
     taste: list = field(default_factory=list)   # liked files: dict(path, name, A, C, V, clap, dsp, twin)
     video_rating: dict = field(default_factory=dict)   # video id -> (value, at)
     favs: dict = field(default_factory=dict)            # video id -> added_at
     twin_cands: dict = field(default_factory=dict)      # taste path -> [video ids] (from the app's name matching)
+
+
+def split_artists(text):
+    """'Saori Hayami (as Yachiyo), ryo' -> ['saori hayami', 'ryo'] (same rule as the app's artist links)."""
+    out = []
+    for a in re.split(r",\s*", text or ""):
+        a = re.sub(r"\s*\((?:as|cv|from)[^)]*\)\s*$", "", a, flags=re.I).strip().lower()
+        if a:
+            out.append(a)
+    return out
 
 
 def _meta_matrix(song_meta, year_w=None):
@@ -132,10 +148,12 @@ def load(features_db: sqlite3.Connection, library_db: sqlite3.Connection, model_
     if not lib:
         return None
     meta = {}
-    for vid, aid, typ, num, part, title, year, ayear, fmt, genres, tags in library_db.execute(
+    artists = {}
+    for vid, aid, typ, num, part, title, year, ayear, fmt, genres, tags, arts in library_db.execute(
             "SELECT v.id, v.anime_id, v.type, v.number, v.part, v.title, v.year, v.anime_year, a.format, "
-            "v.anime_genres, v.anime_tags FROM v_video v LEFT JOIN anime a ON a.id=v.anime_id WHERE v.missing=0"):
+            "v.anime_genres, v.anime_tags, v.artists FROM v_video v LEFT JOIN anime a ON a.id=v.anime_id WHERE v.missing=0"):
         meta[vid] = (aid, typ, num, part, title, ayear or year, fmt, genres, tags)
+        artists[vid] = arts
     lib = [r for r in lib if int(r[1]) in meta]
     vid = np.array([int(r[1]) for r in lib])
     A = np.stack([from_blob(r[2]) for r in lib])
@@ -162,8 +180,10 @@ def load(features_db: sqlite3.Connection, library_db: sqlite3.Connection, model_
         return l2(out)
 
     song_meta, song_name, song_anime, song_dsp = [None] * n, [""] * n, np.full(n, -1), [None] * n
+    song_artists = [set() for _ in range(n)]
     for i, v in enumerate(vid):
         s = song_of[i]
+        song_artists[s].update(split_artists(artists.get(int(v))))
         if song_meta[s] is None:
             aid, typ, num, part, title, year, fmt, genres, tags = meta[v]
             try:
@@ -181,7 +201,7 @@ def load(features_db: sqlite3.Connection, library_db: sqlite3.Connection, model_
                 pass
     d = Data(vid=vid, song_of=song_of, keys=keys, A=songmean(Ac), C=songmean(Cc), V=songmean(Vc),
              M=_meta_matrix(song_meta), song_name=song_name, song_anime=song_anime,
-             song_clap_raw=songmean(l2(C)), song_dsp=song_dsp, mean=mean, song_meta=song_meta)
+             song_clap_raw=songmean(l2(C)), song_dsp=song_dsp, mean=mean, song_meta=song_meta, song_artists=song_artists)
     # AudioSet class probabilities per song (mean of its versions; NaN where not measured)
     mood = np.full((n, 527), np.nan, np.float32)
     acc = {}
@@ -295,10 +315,25 @@ def train_logreg(X, y, w, lam, iters=80):
         return (Xt @ W + b).numpy(), W.numpy().copy()
 
 
-def features(d: Data, mode, p=PARAMS):
+def artist_block(d: Data, y):
+    """One column per artist of a rated song (like or dislike); a song's artists share 1 between them."""
+    names = sorted(set().union(*[d.song_artists[s] for s in np.where(y != 0)[0]])) if d.song_artists else []
+    col = {a: i for i, a in enumerate(names)}
+    R = np.zeros((len(d.keys), len(names)), np.float32)
+    if names:
+        for s, arts in enumerate(d.song_artists):
+            ks = [col[a] for a in arts if a in col]
+            if ks:
+                R[s, ks] = 1.0 / math.sqrt(len(arts))
+    return R
+
+
+def features(d: Data, mode, p=PARAMS, y=None):
     blocks = [d.A * p["w_a"], d.C * p["w_c"]]
     if mode == "mix":
         blocks += [d.V * p["w_v"], d.M * p["w_m"]]
+        if y is not None and p.get("w_r"):
+            blocks.append(artist_block(d, y) * p["w_r"])
     return np.concatenate(blocks, axis=1)
 
 
@@ -336,7 +371,7 @@ def score(d: Data, y, mode, p=PARAMS, extra_pos=None):
     if len(neg):
         out -= p["mix_neg"] * _z(_topk_mean(Z @ Z[neg].T, 1))
     if trained:
-        X = features(d, mode, p)
+        X = features(d, mode, p, y)
         unl = y == 0
         w = np.zeros(len(y), np.float64)
         w[pos] = np.where(y[pos] >= 2, p["w_explicit"], 1.0)   # what the user rated in the app counts most

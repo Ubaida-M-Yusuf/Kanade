@@ -49,7 +49,7 @@ anywhere.
 
 * **It listens and looks.** Every video is analysed once by AI models running locally: a music model (MERT) for
   rhythm, timbre and harmony, a music-and-language model (CLAP) for style, an image model (SigLIP 2) for the look
-  of the animation, plus the anime's genres, tags and era.
+  of the animation, plus the anime's genres, tags and era, and who sings it.
 * **It learns from you.** A small model is trained on your liked folders, favourites and 👍 / 👎 ratings, in about
   a second, whenever you've rated a few songs. A 👎 hides the song immediately and teaches For You to avoid songs
   like it; mistakes are undone completely by removing the rating.
@@ -59,9 +59,12 @@ anywhere.
 * **Teach For You** plays your current top picks one by one, with sound, for quick 👍 / 👎: the fastest way to
   sharpen it.
 * **Song types:** every song is labelled Intense, Energetic, Mellow or Calm from its own sound (an AudioSet
-  classifier), and For You shows your best matches of each type.
-* **Accurate:** in a held-out test on a real library, liked songs the model had never seen landed at the 94th
-  percentile (median), and about half of them in the top 5 %. Details in [RECOMMENDATIONS.md](RECOMMENDATIONS.md).
+  classifier), and For You shows your best matches of each type. The number on a type chip is how many of your
+  liked songs are of that type.
+* **History:** pick an earlier time from the menu next to *Teach For You* to see For You as it was before you
+  rated more songs, then *Back to latest*.
+* **Accurate:** in a held-out test on a real library, liked songs the model had never seen landed at the 97th
+  percentile (median), and about 60 % of them in the top 5 %. Details in [RECOMMENDATIONS.md](RECOMMENDATIONS.md).
 
 ## Requirements
 
@@ -147,7 +150,7 @@ FFmpeg is a separate program under the LGPL/GPL licence and is distributed along
 | Details panel | single click (never starts playback) |
 | Search | type anywhere after pressing **/**; e.g. `bocchi op1`, `attack on titan`, `LiSA`, `進撃`. The small **×** in the search box (and in the *Series…* box) clears it; so does **Esc** |
 | Seasons and related series | on a series page, **Series order** lists every related entry in your library (sequels, prequels, side stories, movies, spin-offs...) by release date, with *You are here* on the current one. **‹ Prequel** / **Sequel ›** flip straight to the neighbouring season. Related entries you don't have are shown dimmed and open on AniList |
-| For You | the sidebar view that ranks the library by your taste (see [RECOMMENDATIONS.md](RECOMMENDATIONS.md)). Tabs: **For you** (songs you haven't rated yet), **Liked** (likes, favourites and songs from your liked folders, newest first: *Date liked* uses the moment you liked or favourited it, or the date of the file in your liked folder), **Hidden** (dislikes, with *Unhide*). New results appear the next time you open For You (or via *Show* in the header), never while you're looking at it; the scroll position is kept when nothing changed |
+| For You | the sidebar view that ranks the library by your taste (see [RECOMMENDATIONS.md](RECOMMENDATIONS.md)). Tabs: **For you** (songs you haven't rated yet), **Liked** (likes, favourites and songs from your liked folders, newest first: *Date liked* uses the moment you liked or favourited it, or the date of the file in your liked folder), **Hidden** (dislikes, with *Unhide*). New results appear the next time you open For You (or via *Show* in the header), never while you're looking at it; the scroll position is kept when nothing changed. The history menu shows earlier rankings |
 | Like / dislike | hover a card and press 👍 / 👎 (or select it and press **L** / **D**, or right-click). A like or dislike applies to the whole song (all its versions). Disliked songs leave For You at once; Kanade learns from ratings in a few seconds, after 5 new ratings, 30 s without one, or when you leave For You. **Undo** is in the toast |
 | Versions | every version / resolution / creditless copy of one song is grouped into one stacked card with a count badge (⧉ 3). One click opens the details panel like any card; **double-click** (or click the ⧉ badge) shows all versions with their thumbnails, resolution and tags. In that pop-up, click to select a version and double-click to play it in VLC (ⓘ shows its details). The stack button in the toolbar turns grouping off |
 | Resolution | top-right badge on every card (4K, 1080p, 720p, 480p...) |
