@@ -44,9 +44,10 @@ def list_anime() -> list[dict]:
                    COALESCE(ao.title_japanese, a.title_japanese) AS title_japanese,
                    COALESCE(ao.year, a.year) AS year, COALESCE(ao.season, a.season) AS season, a.format,
                    a.cover_path IS NOT NULL AS has_cover, v.ops, v.eds, v.videos, v.favs, v.added, v.folders,
-                   a.genres, a.tags, a.suggestive, a.explicit, a.dark, a.content
+                   a.genres, a.tags, a.suggestive, a.explicit, a.dark, a.content, ml.status AS mal_status
                    FROM v JOIN anime a ON a.id = v.anime_id
-                   LEFT JOIN anime_override ao ON ao.anime_id = a.id""")
+                   LEFT JOIN anime_override ao ON ao.anime_id = a.id
+                   LEFT JOIN mal_list ml ON ml.mal_id = a.mal_id""")
     out = []
     for r in rows:
         d = dict(r)

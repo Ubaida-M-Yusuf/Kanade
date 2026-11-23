@@ -103,6 +103,13 @@ CREATE TABLE IF NOT EXISTS favorite(
     added_at REAL
 );
 
+-- The user's MyAnimeList anime list (Settings > Metadata sources), for the "My list" filter.
+CREATE TABLE IF NOT EXISTS mal_list(
+    mal_id INTEGER PRIMARY KEY,
+    status TEXT NOT NULL,          -- watching / completed / on_hold / dropped / plan_to_watch
+    score  INTEGER NOT NULL DEFAULT 0
+);
+
 -- For You feedback: 1 = like, -1 = dislike (hidden from For You). The taste model learns from both.
 CREATE TABLE IF NOT EXISTS rating(
     video_id INTEGER PRIMARY KEY REFERENCES video(id) ON DELETE CASCADE,

@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import APP_NAME, __version__, activity, catalog, content, db, library, media, recommend, search
+from . import APP_NAME, __version__, activity, catalog, content, db, library, mallist, media, recommend, search
 from .config import data_dir, resource_dir, settings
 from .jobs import manager
 from .net import HostDown
@@ -114,7 +114,7 @@ def api_get(path: str, qs: dict):
                 "tools": media.tools_status(), "counts": counts_cached(),
                 "catalog": {"size": catalog.catalog_size(), "age_days": catalog.catalog_age_days()},
                 "data_dir": str(data_dir()), "status": manager().status(), "taste": recommend.engine_status(),
-                "mal": content.mal_status(),
+                "mal": content.mal_status(), "mal_list": mallist.status(),
                 "root_exists": bool(settings().get("archive_root")) and os.path.isdir(settings().get("archive_root"))}
     if path == "/api/videos":
         return RawJSON(videos_payload())
@@ -124,6 +124,8 @@ def api_get(path: str, qs: dict):
     if path == "/api/clipboard":
         from . import osutil
         return {"text": osutil.clipboard_text()[:20000]}
+    if path == "/api/mal-list":
+        return mallist.status()
     if path == "/api/foryou/history":
         at = g("at")
         return recommend.history_ranking(float(at)) if at else {"rows": recommend.history()}
@@ -205,6 +207,9 @@ def api_post(path: str, body: dict):
         if open_window_hook is None:
             return {"url": url}            # in a browser: the page opens a new tab itself
         open_window_hook(title, url)
+        return {"ok": True}
+    if path == "/api/mal-list/refresh":
+        jm.start_mal_list(force=True)
         return {"ok": True}
     if path == "/api/retry":
         return {"ok": jm.retry(str(body.get("key") or ""))}
@@ -305,7 +310,17 @@ def api_post(path: str, body: dict):
     if path == "/api/settings":
         before = settings().get("archive_root")
         mal_before = settings().get("mal_client_id")
-        settings().update(body or {})
+        user_before = settings().get("mal_user")
+        body = dict(body or {})
+        if "mal_user" in body:                      # a profile / list link or a name -> the name
+            raw = str(body["mal_user"] or "").strip()
+            body["mal_user"] = mallist.parse_user(raw)
+            if raw and not body["mal_user"]:
+                raise ApiError("That doesn't look like a MyAnimeList profile link or name.")
+        settings().update(body)
+        if settings().get("mal_user") != user_before:
+            db.meta_set("mal_list_error", "")
+            jm.start_mal_list(force=True)           # new profile (or client ID): read the list right away
         if settings().get("mal_client_id") != mal_before:
             db.meta_set("mal_error", "")
             jm.start_mal()                    # new MyAnimeList client ID: start fetching right away

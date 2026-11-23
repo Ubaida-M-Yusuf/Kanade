@@ -37,7 +37,7 @@ const S = {
   view: "all", seriesId: null, history: [],
   q: "", searchIds: null, searchRank: null,
   filters: { type: "", year: "", series: "", num: "", fav: false, artist: "", genres: new Set(), genreMode: "any",
-             formats: new Set(), seasons: new Set(), quality: new Set(), lyrics: false, original: false,
+             formats: new Set(), seasons: new Set(), quality: new Set(), lyrics: false, original: false, mylist: new Set(),
              content: { sug: "", exp: "", dark: "", nsfw: "" } },
   genreSearch: "", fTab: "type",
   genreIndex: new Map(),   // "Action" / "tag:Mecha" -> Set(anime ids)
@@ -160,6 +160,7 @@ async function loadData(keepScroll = true) {
     S.mediaVersion = vd.media_version;
     S.mediaTs = vd.media_ts;
     S.lastLoad = Date.now();
+    api.get("/api/mal-list").then((r) => { if (S.boot) S.boot.mal_list = r; }).catch(() => {});   // "My list" summary
     for (const id of [...S.sel]) if (!S.byId.has(id)) S.sel.delete(id);
     updateCounts();
     fillFilterOptions();
@@ -233,6 +234,7 @@ function animeFacetSet() {
   if (f.seasons.size) narrow(new Set(S.anime.filter((a) => f.seasons.has(a.season || "")).map((a) => a.id)));
   const g = genreAnimeSet();
   if (g) narrow(g);
+  if (f.mylist && f.mylist.size) narrow(new Set(S.anime.filter((a) => f.mylist.has(a.mal_status || "none")).map((a) => a.id)));
   const cf = f.content || {};
   for (const [k, col] of [["sug", "suggestive"], ["exp", "explicit"], ["dark", "dark"]]) {
     if (cf[k]) narrow(new Set(S.anime.filter((a) => (cf[k] === "only") === !!a[col]).map((a) => a.id)));
@@ -255,7 +257,7 @@ function panelFilterCount() {
   const f = S.filters;
   const cf = f.content || {};
   return f.genres.size + f.formats.size + f.seasons.size + f.quality.size + (f.lyrics ? 1 : 0) + (f.original ? 1 : 0) +
-    ["sug", "exp", "nsfw"].filter((k) => cf[k]).length;
+    (f.mylist ? f.mylist.size : 0) + ["sug", "exp", "dark", "nsfw"].filter((k) => cf[k]).length;
 }
 
 /** "Saori Hayami (as Yachiyo), ryo" -> ["Saori Hayami", "ryo"] */
@@ -285,6 +287,7 @@ function activeFilterList() {
   if (f.artist) out.push({ g: "artist", k: f.artist, label: "Artist: " + f.artist });
   for (const k of f.formats) out.push({ g: "format", k, label: fmtFormat(k) });
   for (const k of f.seasons) out.push({ g: "season", k, label: k });
+  for (const k of (f.mylist || [])) out.push({ g: "mylist", k, label: "My list: " + ((MAL_STATUSES.find((x) => x[0] === k) || [0, k])[1]) });
   for (const k of f.genres) out.push({ g: "genre", k, label: k.startsWith("tag:") ? "#" + gLabel(k) : k });
   for (const k of f.quality) out.push({ g: "quality", k, label: (QUALITY.find((q) => q[0] === k) || [0, k])[1] });
   if (f.lyrics) out.push({ g: "lyrics", k: "1", label: "Lyrics / subtitles" });
@@ -308,11 +311,14 @@ function removeFilter(g, k) {
   else if (g === "lyrics") f.lyrics = false;
   else if (g === "original") f.original = false;
   else if (g === "content") f.content[k] = "";
+  else if (g === "mylist") f.mylist.delete(k);
 }
 
+const MAL_STATUSES = [["watching", "Watching"], ["completed", "Completed"], ["on_hold", "On hold"], ["dropped", "Dropped"],
+                      ["plan_to_watch", "Plan to watch"], ["none", "Not on my list"]];
 function toggleFilter(g, k, on) {
   const f = S.filters;
-  const sets = { format: f.formats, season: f.seasons, genre: f.genres, quality: f.quality };
+  const sets = { format: f.formats, season: f.seasons, genre: f.genres, quality: f.quality, mylist: f.mylist };
   if (sets[g]) { if (on) sets[g].add(k); else sets[g].delete(k); }
   else if (g === "lyrics") f.lyrics = on;
   else if (g === "original") f.original = on;
@@ -364,7 +370,8 @@ function renderFilterPanel() {
     genres: [...f.genres].filter((k) => !k.startsWith("tag:")).length,
     tags: [...f.genres].filter((k) => k.startsWith("tag:")).length,
     more: f.quality.size + (f.lyrics ? 1 : 0) + (f.original ? 1 : 0),
-    content: ["sug", "exp", "nsfw"].filter((k) => (f.content || {})[k]).length,
+    content: ["sug", "exp", "dark", "nsfw"].filter((k) => (f.content || {})[k]).length,
+    mylist: f.mylist ? f.mylist.size : 0,
   };
   const tabBtn = (id, label) => `<button class="ftab${tab === id ? " on" : ""}" data-tab="${id}">${label}${nTabs[id] ? `<b>${nTabs[id]}</b>` : ""}</button>`;
   const modeSeg = `<div class="seg" title="How to combine several genres/tags">
@@ -386,6 +393,21 @@ function renderFilterPanel() {
     const shown = tags.filter(([k, n]) => n >= 3 && (!q || gLabel(k).toLowerCase().includes(q))).slice(0, q ? 300 : 150);
     body = `<div class="ftools"><div class="search mini">${icon("search")}<input id="gSearch" placeholder="Search tags (idol, mecha, isekai…)" value="${esc(S.genreSearch)}" autocomplete="off"></div>${modeSeg}</div>${modeHint}
       ${shown.length ? `<div class="ggrid">${shown.map(([k, n]) => filterChip("genre", k, esc(gLabel(k)), n, f.genres.has(k))).join("")}</div>` : `<div class="loading">No tag matches “${esc(S.genreSearch)}”.</div>`}`;
+  } else if (tab === "mylist") {
+    const ml = (S.boot && S.boot.mal_list) || {};
+    if (!ml.user) {
+      body = `<div class="gsec">My MyAnimeList list</div>
+        <div class="gpop-hint">Add your MyAnimeList profile link in <b>Settings ▸ Metadata sources</b> to filter by the anime
+        you watched, are watching or plan to watch.</div>
+        <button class="btn sm" data-gact="settings">${icon("gear")}Open Settings</button>`;
+    } else {
+      const cnt = new Map();
+      for (const a of S.anime) { const k = a.mal_status || "none"; cnt.set(k, (cnt.get(k) || 0) + 1); }
+      body = `<div class="gsec">My MyAnimeList list <small>· ${esc(ml.user)} · ${(ml.entries || 0).toLocaleString()} anime, ${(ml.in_library || 0).toLocaleString()} of them in your library</small></div>
+        ${ml.error ? `<div class="cp-warn">${esc(ml.error)}</div>` : ""}
+        <div class="ggrid g3">${MAL_STATUSES.map(([k, label]) => filterChip("mylist", k, esc(label), cnt.get(k) || 0, f.mylist.has(k))).join("")}</div>
+        <div class="gpop-hint">Series by their status on your list (tick several to combine them). Counts are series in your library.</div>`;
+    }
   } else if (tab === "content") {
     const nSug = S.anime.filter((a) => a.suggestive).length, nExp = S.anime.filter((a) => a.explicit).length;
     const nDark = S.anime.filter((a) => a.dark).length;
@@ -411,7 +433,7 @@ function renderFilterPanel() {
   }
   const active = activeFilterList();
   pop.innerHTML = `
-    <div class="ftabs">${tabBtn("type", "Type &amp; season")}${tabBtn("genres", "Genres")}${tabBtn("tags", "Tags")}${tabBtn("content", "Content")}${tabBtn("more", "Quality &amp; more")}</div>
+    <div class="ftabs">${tabBtn("type", "Type &amp; season")}${tabBtn("genres", "Genres")}${tabBtn("tags", "Tags")}${tabBtn("content", "Content")}${tabBtn("mylist", "My list")}${tabBtn("more", "Quality &amp; more")}</div>
     ${active.length ? `<div class="gsel">${active.map((x) => `<button class="achip ${x.g}" data-unsel="${esc(x.g)}|${esc(x.k)}">${esc(x.label)}<span>✕</span></button>`).join("")}</div>` : ""}
     <div class="gpop-body">${body}</div>
     <div class="gpop-foot"><span class="gres" id="gResult"></span>
@@ -452,7 +474,7 @@ function setGenre(g) {
 
 function clearAllFilters() {
   S.filters = { type: "", year: "", series: "", num: "", fav: false, artist: "", genres: new Set(), genreMode: S.filters.genreMode,
-                formats: new Set(), seasons: new Set(), quality: new Set(), lyrics: false, original: false,
+                formats: new Set(), seasons: new Set(), quality: new Set(), lyrics: false, original: false, mylist: new Set(),
                 content: { sug: "", exp: "", dark: "", nsfw: "" } };
   S.genreSearch = "";
   $("#q").value = ""; S.q = ""; S.searchIds = null; S.searchRank = null;
@@ -478,11 +500,12 @@ function onFilterClick(e) {
   const a = e.target.closest("[data-gact]");
   if (a && a.dataset.gact === "clear") {
     const f = S.filters;
-    f.genres.clear(); f.formats.clear(); f.seasons.clear(); f.quality.clear(); f.lyrics = false; f.original = false;
+    f.genres.clear(); f.formats.clear(); f.seasons.clear(); f.quality.clear(); f.lyrics = false; f.original = false; f.mylist.clear();
     f.content = { sug: "", exp: "", nsfw: "" };
     renderFilterPanel(); applyGenreChange(); return true;
   }
   if (a && a.dataset.gact === "done") { toggleFilterPanel(false); return true; }
+  if (a && a.dataset.gact === "settings") { toggleFilterPanel(false); setView("settings"); return true; }
   return false;
 }
 
@@ -2162,6 +2185,11 @@ async function renderSettings() {
         <input id="s_mal" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your client ID (myanimelist.net ▸ Account Settings ▸ API)" value="${esc(st.mal_client_id || "")}">
         <div class="status-line" style="margin-top:6px"><span class="dotc ${!st.mal_client_id ? "mid" : b.mal && b.mal.error ? "bad" : ""}"></span>${!st.mal_client_id ? "MyAnimeList: not connected"
           : b.mal && b.mal.error ? esc(b.mal.error) : `MyAnimeList: ${(b.mal ? b.mal.done : 0).toLocaleString()} of ${(b.mal ? b.mal.total : 0).toLocaleString()} series done${b.mal && b.mal.waiting ? ` · ${b.mal.waiting} without genres yet (asked again in a month)` : ""}${b.mal && b.mal.done + (b.mal.waiting || 0) < b.mal.total ? " · continues in the background" : ""}`}</div></div>
+      <div class="field"><label>Your MyAnimeList profile <small>· its anime list (watching, completed, plan to watch…) becomes a filter: Filters ▸ My list</small></label>
+        <input id="s_maluser" autocomplete="off" spellcheck="false" placeholder="https://myanimelist.net/profile/yourname (or just the name)" value="${esc(st.mal_user || "")}">
+        <div class="status-line" style="margin-top:6px"><span class="dotc ${!st.mal_user ? "mid" : b.mal_list && b.mal_list.error ? "bad" : ""}"></span>${!st.mal_user ? "Not set (the list must be public)"
+          : b.mal_list && b.mal_list.error ? esc(b.mal_list.error) : b.mal_list && b.mal_list.at ? `${esc(st.mal_user)}: ${b.mal_list.entries.toLocaleString()} anime on the list, ${b.mal_list.in_library.toLocaleString()} of them in your library · updated ${new Date(b.mal_list.at * 1000).toLocaleString()}` : "Reading the list…"}
+          ${st.mal_user ? `<button class="hlink inline" data-s="mal-list-refresh">Refresh now</button>` : ""}</div></div>
       <label class="check-row"><input type="checkbox" id="s_ollama" ${st.ollama_enabled ? "checked" : ""}> Use Ollama for ambiguous filenames</label>
       <div class="field half"><label>Ollama URL</label><input id="s_ourl" value="${esc(st.ollama_url)}"></div>
       <div class="field half"><label>Ollama model</label>${ol.models.length ? `<select id="s_omodel"><option value="">First available</option>${ol.models.map((mm) => `<option ${mm === st.ollama_model ? "selected" : ""}>${esc(mm)}</option>`).join("")}</select>` : `<input id="s_omodel" value="${esc(st.ollama_model)}" placeholder="e.g. llama3.1:8b">`}</div>
@@ -2208,11 +2236,12 @@ async function renderSettings() {
       }
       if (a === "engine-setup") { if (S.tasteDraft.length) await api.post("/api/taste", { folders: S.tasteDraft, use_favorites: $("#t_fav").checked }); openForYouSetup(ei); }
       if (a === "engine-analyze") { await api.post("/api/engine/analyze"); toast("For You analysis started"); }
+      if (a === "mal-list-refresh") { await api.post("/api/mal-list/refresh"); toast("Reading your MyAnimeList list…"); setTimeout(() => { if (S.view === "settings") renderSettings(); }, 6000); }
       if (a === "save") {
         const r = await api.post("/api/settings", {
           archive_root: $("#s_root").value.trim(), vlc_path: $("#s_vlc").value.trim(), hover_preview: $("#s_hover").checked,
           use_anilist: $("#s_anilist").checked, use_jikan: $("#s_jikan").checked, ollama_enabled: $("#s_ollama").checked,
-          mal_client_id: $("#s_mal").value.trim(),
+          mal_client_id: $("#s_mal").value.trim(), mal_user: $("#s_maluser").value.trim(),
           ollama_url: $("#s_ourl").value.trim(), ollama_model: $("#s_omodel").value.trim(), accept_confidence: Number($("#s_accept").value) || 0.85,
           workers: Number($("#s_workers").value) || 4, thumb_width: Number($("#s_tw").value) || 480,
           auto_rescan_minutes: Math.max(0, Number($("#s_rescan").value) || 0),

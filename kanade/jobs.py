@@ -146,6 +146,20 @@ class JobManager:
         return (self.pipeline.state != "running" and self.thumbs.state != "running"
                 and self._q.empty() and not self._thumb_wake.is_set())
 
+    def start_mal_list(self, force: bool = False):
+        """Read the user's MyAnimeList list (in the background; a failure becomes a notice with Retry)."""
+        from . import mallist
+
+        def run():
+            try:
+                mallist.refresh(force)
+                self.notices.clear("mal_list")
+            except Exception as e:
+                db.meta_set("mal_list_error", str(e)[:200])
+                self.notices.set("mal_list", "Your MyAnimeList list", f"Couldn't read it: {str(e)[:160]}. "
+                                 "The \"My list\" filter uses the last copy meanwhile.", "mal_list")
+        threading.Thread(target=run, name="mal-list", daemon=True).start()
+
     RETRY_JOBS = {"scan": "scan", "identify": "scan", "catalog": "sync_catalog", "titles": "fill_from_anilist",
                   "genres": "fill_genres", "content": "fill_content", "relations": "fill_relations"}
 
@@ -165,6 +179,8 @@ class JobManager:
             self.start_mal()
         elif key == "foryou":
             self.request_recs("analyze")
+        elif key == "mal_list":
+            self.start_mal_list(force=True)
         else:
             return False
         return True
@@ -367,6 +383,7 @@ class JobManager:
             self._step("content", "Content ratings", "Ecchi / 18+ ratings of some series are still missing",
                        self._job_fill_content)
         self.start_mal()
+        self.start_mal_list()                  # the user's list, when it is a few hours old
         self.request_recs("analyze")
         if settings().get("use_anilist"):
             self._step("relations", "Related series (AniList)", "Sequels / prequels of some series are still missing",
