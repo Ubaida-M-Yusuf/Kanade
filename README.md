@@ -57,7 +57,7 @@ anywhere.
   matched by name and confirmed by sound to the library copy of the same opening, so it learns from the right
   file.
 * **Teach For You** plays your current top picks one by one, with sound, for quick 👍 / 👎: the fastest way to
-  sharpen it.
+  sharpen it. With a song type selected (e.g. Calm), it plays the top picks of that type.
 * **Song types:** every song is labelled Intense, Energetic, Mellow or Calm from its own sound (an AudioSet
   classifier), and For You shows your best matches of each type. The number on a type chip is how many of your
   liked songs are of that type.

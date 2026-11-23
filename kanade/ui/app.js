@@ -1497,7 +1497,9 @@ function nextRating(cardId, value) {
     wrong, so these ratings teach it the most. One song per series; plays the best version with sound. */
 function openTeach() {
   const rated = ratedSongs(), seenSeries = new Set(), queue = [];
-  const ranked = S.videos.filter((v) => S.rec.has(v.id) && !rated.has(songKey(v)))
+  // the current top picks; with a song-type chip selected (e.g. Calm), the top picks of that type
+  const g = S.recGroup >= 0 && S.recGroup < S.recGroups.length ? S.recGroup : -1;
+  const ranked = S.videos.filter((v) => S.rec.has(v.id) && !rated.has(songKey(v)) && (g < 0 || bestGroup(S.rec.get(v.id)) === g))
     .sort((a, b) => recScore(S.rec.get(b.id)) - recScore(S.rec.get(a.id)));
   const seenSong = new Set();
   for (const v of ranked) {
