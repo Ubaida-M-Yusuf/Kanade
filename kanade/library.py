@@ -226,7 +226,7 @@ def related_series(anime_id: int) -> dict:
                 continue
             label = REL_LABELS.get(e["rel"], "Related")
             found[e["al"]] = {"title": e.get("title"), "title_english": e.get("en"), "year": e.get("year"),
-                              "format": e.get("format"), "al": e["al"],
+                              "format": e.get("format"), "al": e["al"], "mal": e.get("mal"),
                               "rel": label, "of": None if lid == anime_id else (titles.get(lid) or "another entry"),
                               "near": (lid != anime_id, depth.get(g["own"].get(lid), 99), MISSING_RELS.index(e["rel"]))}
     missing = sorted(found.values(), key=lambda m: m["near"])[:MISSING_MAX]

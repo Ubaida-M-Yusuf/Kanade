@@ -1121,8 +1121,8 @@ function relatedHTML(d) {
       <span class="rt"><span class="rk">${x.current ? "You are here" : esc(x.rel || "Same franchise")}</span>
         <span class="rn">${esc(x.title)}</span><span class="rm">${esc(meta(x))}</span></span></button>`;
   }).join("");
-  const missing = (d.related_missing || []).map((m) => `<a href="#" class="rel-item ghost" data-ext="https://anilist.co/anime/${m.al}" title="${esc(m.title || "")}
-${esc(m.rel)}${m.of ? ` of ${esc(m.of)}` : ""} · not in your library (opens AniList)">
+  const missing = (d.related_missing || []).map((m) => `<a href="#" class="rel-item ghost" data-extmenu="1" data-mal="${m.mal || ""}" data-al="${m.al || ""}" title="${esc(m.title || "")}
+${esc(m.rel)}${m.of ? ` of ${esc(m.of)}` : ""} · not in your library (click: MyAnimeList or AniList)">
       <span class="rc">${icon("link")}</span>
       <span class="rt"><span class="rk">${esc(m.rel)} · not in library</span><span class="rn">${esc(m.title || "Unknown")}</span><span class="rm">${esc([m.of ? `of ${m.of}` : "", meta(m)].filter(Boolean).join(" · "))}</span></span></a>`).join("");
   const nav = (n, dir) => n ? `<button class="btn sm rel-go" data-goanime="${n.id}" title="${esc(n.title)}">${dir < 0 ? "‹ " : ""}${esc(n.label)}${dir > 0 ? " ›" : ""}</button>`
@@ -1795,6 +1795,14 @@ canvas.addEventListener("click", (e) => {
   if (fb) { e.stopPropagation(); const id = Number(fb.dataset.fav); const v = S.byId.get(id); toggleFav([id], !(v && v.fav)); return; }
   const ext = e.target.closest("[data-ext]");
   if (ext) { e.preventDefault(); return openExternal(ext.dataset.ext); }
+  const xm = e.target.closest("[data-extmenu]");              // a related entry not in the library: where to look it up
+  if (xm) {
+    e.preventDefault(); e.stopPropagation();
+    const mal = Number(xm.dataset.mal), al = Number(xm.dataset.al), items = [];
+    if (mal) items.push({ label: "Open on MyAnimeList", icon: "link", fn: () => openExternal(`https://myanimelist.net/anime/${mal}`) });
+    if (al) items.push({ label: "Open on AniList", icon: "link", fn: () => openExternal(`https://anilist.co/anime/${al}`) });
+    return showCtx(e.clientX, e.clientY, items);
+  }
   const act = e.target.closest("[data-act]");
   if (act) return heroAction(act.dataset.act);
   const tg = e.target.closest(".hlink[data-tg]");
