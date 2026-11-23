@@ -77,7 +77,7 @@ def anime_detail(anime_id: int) -> dict | None:
 REL_LABELS = {"PREQUEL": "Prequel", "SEQUEL": "Sequel", "PARENT": "Main story", "SIDE_STORY": "Side story",
               "SPIN_OFF": "Spin-off", "ALTERNATIVE": "Alternative version", "SUMMARY": "Recap",
               "COMPILATION": "Compilation", "CONTAINS": "Contains", "OTHER": "Related", "ADAPTATION": "Adaptation",
-              "SOURCE": "Source"}
+              "SOURCE": "Source", "LATER_SEQUEL": "Later sequel", "EARLIER_PREQUEL": "Earlier prequel"}
 # relations that make two entries part of the same franchise (OTHER = loose links such as crossovers)
 FRANCHISE_RELS = {"PREQUEL", "SEQUEL", "PARENT", "SIDE_STORY", "SPIN_OFF", "ALTERNATIVE", "SUMMARY",
                   "COMPILATION", "CONTAINS"}
@@ -99,6 +99,7 @@ def _relation_graph() -> dict:
         own: dict[int, int] = {}               # local series id -> AniList id
         edges: dict[int, list[dict]] = {}      # local series id -> its relations
         adj: dict[int, set[int]] = {}
+        seq: dict[int, set[int]] = {}           # AniList id -> its direct sequels (from both sides' relations)
         info: dict[int, dict] = {}             # AniList id -> what other entries say about it (title, date...)
         mal_only: dict[int, list[int]] = {}
         for r in rows:
@@ -118,13 +119,21 @@ def _relation_graph() -> dict:
                 if al and e["rel"] in FRANCHISE_RELS:
                     adj.setdefault(al, set()).add(e["al"])
                     adj.setdefault(e["al"], set()).add(al)
+                if al and e["rel"] == "SEQUEL":
+                    seq.setdefault(al, set()).add(e["al"])
+                elif al and e["rel"] == "PREQUEL":
+                    seq.setdefault(e["al"], set()).add(al)
         for e in list(info.values()):                 # series known only by MAL id: recognise them in others' edges
             for lid in mal_only.get(e.get("mal") or -1, []):
                 if lid not in own:
                     own[lid] = e["al"]
                     local.setdefault(e["al"], []).append(lid)
         _graph.clear()
-        _graph.update(ver=ver, local=local, own=own, edges=edges, adj=adj, info=info)
+        pre: dict[int, set[int]] = {}
+        for a, bs in seq.items():
+            for b in bs:
+                pre.setdefault(b, set()).add(a)
+        _graph.update(ver=ver, local=local, own=own, edges=edges, adj=adj, info=info, seq=seq, pre=pre)
         return _graph
 
 
@@ -166,9 +175,24 @@ def related_series(anime_id: int) -> dict:
         month = i.get("month") or SEASON_MONTH.get((r["season"] or i.get("season") or "").upper(), 13)
         return (year, month, r["title"] or "")
 
+    def chain(nxt):                                     # everything reachable by sequel (or prequel) steps only
+        seen, todo = set(), [al]
+        while todo:
+            for m in nxt.get(todo.pop(), ()):
+                if m not in seen and m != al:
+                    seen.add(m)
+                    todo.append(m)
+        return seen
+    later, earlier = chain(g.get("seq", {})), chain(g.get("pre", {}))
+
     out = []
     for r in sorted(rows, key=when):
-        rel = direct.get(g["own"].get(r["id"]))
+        other = g["own"].get(r["id"])
+        rel = direct.get(other)
+        if not rel and other in later and other not in earlier:
+            rel = "LATER_SEQUEL"                        # a sequel of a sequel...: later in the story
+        elif not rel and other in earlier and other not in later:
+            rel = "EARLIER_PREQUEL"
         out.append({"id": r["id"], "title": r["title"], "title_english": r["title_english"], "year": r["year"],
                     "season": r["season"], "format": r["format"], "has_cover": bool(r["has_cover"]),
                     "current": r["id"] == anime_id,
@@ -179,6 +203,11 @@ def related_series(anime_id: int) -> dict:
         for x in out:                                   # the direct prequel / sequel, when it is in the library
             if x["rel_type"] == kind:
                 return {"id": x["id"], "title": x["title"], "label": REL_LABELS[kind]}
+        far = "EARLIER_PREQUEL" if kind == "PREQUEL" else "LATER_SEQUEL"
+        chain_items = [x for x in out if x["rel_type"] == far]          # else the closest one further along the story
+        if chain_items:
+            x = chain_items[-1] if step < 0 else chain_items[0]
+            return {"id": x["id"], "title": x["title"], "label": REL_LABELS[far]}
         j = pos + step                                  # otherwise the neighbour in release order
         if 0 <= j < len(out):
             return {"id": out[j]["id"], "title": out[j]["title"], "label": "Previous" if step < 0 else "Next"}

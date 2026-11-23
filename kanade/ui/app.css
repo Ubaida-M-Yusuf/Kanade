@@ -577,7 +577,7 @@ select option { background: var(--surface-2); }
 .rel-go { min-width: 92px; justify-content: center; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rel-strip { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 10px; scroll-snap-type: x proximity;
   scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
-  mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); }
+}
 .rel-strip::-webkit-scrollbar { height: 6px; }
 .rel-strip::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; }
 .rel-item { flex: none; width: 236px; height: 104px; display: flex; gap: 10px; align-items: stretch; padding: 8px; border-radius: 12px;
@@ -806,3 +806,17 @@ select.fy-hist { height: 32px; border-radius: 9px; border: 1px solid var(--line-
   padding: 0 22px 0 10px; font-size: 12px; font-weight: 600; color: var(--text-2); width: 112px; }
 select.fy-hist:hover { color: var(--text); border-color: rgba(255,255,255,.18); }
 .view-sub .fy-meta { display: inline; white-space: normal; font-size: inherit; margin: 0; }
+
+/* series order strip: big ‹ › buttons and soft edge fades where more entries are hidden */
+.rel-wrap { position: relative; }
+.rel-wrap.can-r .rel-strip { mask-image: linear-gradient(90deg, #000 calc(100% - 70px), transparent); }
+.rel-wrap.can-l .rel-strip { mask-image: linear-gradient(90deg, transparent, #000 70px); }
+.rel-wrap.can-l.can-r .rel-strip { mask-image: linear-gradient(90deg, transparent, #000 70px, #000 calc(100% - 70px), transparent); }
+.rel-arrow { position: absolute; top: 31px; z-index: 2; width: 44px; height: 44px; border-radius: 50%; display: none;
+  place-items: center; border: 1px solid var(--line-2); background: rgba(22,24,34,.92); color: var(--text); cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,.45); transition: background .15s, transform .15s; }
+.rel-arrow:hover { background: var(--accent); border-color: var(--accent); color: #fff; transform: scale(1.06); }
+.rel-arrow svg { width: 20px; height: 20px; }
+.rel-arrow.l { left: 2px; } .rel-arrow.l svg { transform: rotate(180deg); }
+.rel-arrow.r { right: 2px; }
+.rel-wrap.can-l .rel-arrow.l, .rel-wrap.can-r .rel-arrow.r { display: grid; }

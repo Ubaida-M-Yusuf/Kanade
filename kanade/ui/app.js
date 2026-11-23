@@ -721,7 +721,8 @@ function cardHTML(v, idx) {
       <span class="badge ${v.type || ""}">${esc(themeLabel(v))}${many ? "" : ver}</span>
       <span class="tr"><span class="info">${tags}${marks}${res ? `<span class="res r${res.replace(/\D/g, "") || "4"}" title="${v.width}×${v.height}">${res}</span>` : ""}</span>${acts}</span>
       ${v.status === "review" ? `<span class="review-flag">Review</span>` : ""}
-      ${S.view === "foryou" && S.rec.has(v.id) && !hidden ? matchPill(S.rec.get(v.id)) : ""}
+      ${hidden ? "" : S.view === "foryou" ? (S.rec.has(v.id) ? matchPill(S.rec.get(v.id)) : "")
+        : (S.recLatest || S.rec).has(v.id) ? matchPill((S.recLatest || S.rec).get(v.id), true) : ""}
       ${hidden ? `<button class="unhide" data-rate="0" title="Show this song in For You again">${icon("eye")}Unhide</button>` : ""}
       <span class="br">${many ? `<span class="vcount" title="${members.length} versions of this song: click to see them all">${icon("stack")}${members.length}</span>` : ""}${v.duration ? `<span class="dur">${fmtDur(v.duration)}</span>` : ""}</span>
       <span class="check">${icon("check")}</span>
@@ -834,8 +835,10 @@ function showEmpty(n, html) {
   if (!n) e.innerHTML = html;
 }
 
-function matchPill(r) {
-  const p = recScore(r);
+/** The "how well it fits your taste" badge. overall: the whole-taste score (outside For You, where the song-type
+    chips don't apply), else the score For You is showing. */
+function matchPill(r, overall = false) {
+  const p = overall ? (S.recMode === "mix" ? r.m : r.a) : recScore(r);
   const tier = p >= 97 ? "hot" : p >= 85 ? "warm" : "";
   return `<span class="match ${tier}" title="Match with your taste">${Math.round(p)}%</span>`;
 }
@@ -1127,14 +1130,31 @@ function relatedHTML(d) {
     <div class="rel-head"><span class="rel-title">${inLib > 1 ? "Series order" : "Related"}</span>
       <span class="rel-sub">${inLib > 1 ? `${inLib} in your library, by release date` : "not in your library"}</span>
       ${inLib > 1 ? `<span class="rel-nav">${nav(d.prev, -1)}${nav(d.next, 1)}</span>` : ""}</div>
-    <div class="rel-strip">${items}${missing}</div></div>`;
+    <div class="rel-wrap">
+      <button class="rel-arrow l" data-relscroll="-1" title="Earlier entries">${icon("chev")}</button>
+      <div class="rel-strip">${items}${missing}</div>
+      <button class="rel-arrow r" data-relscroll="1" title="Later entries">${icon("chev")}</button></div></div>`;
 }
 
 function centerRelated() {
   const strip = canvas.querySelector(".rel-strip"), cur = strip && strip.querySelector(".rel-item.cur");
-  if (!strip || !cur) return;
-  strip.scrollLeft = Math.max(0, cur.offsetLeft - (strip.clientWidth - cur.offsetWidth) / 2);
+  if (strip && cur) strip.scrollLeft = Math.max(0, cur.offsetLeft - (strip.clientWidth - cur.offsetWidth) / 2);
+  updateRelArrows();
 }
+/** The ‹ › buttons and edge fades of the series-order strip: shown only where there is more to see. */
+function updateRelArrows() {
+  const strip = canvas.querySelector(".rel-strip"); if (!strip) return;
+  const wrap = strip.parentElement, max = strip.scrollWidth - strip.clientWidth;
+  wrap.classList.toggle("can-l", strip.scrollLeft > 4);
+  wrap.classList.toggle("can-r", strip.scrollLeft < max - 4);
+}
+canvas.addEventListener("scroll", (e) => { if (e.target.classList && e.target.classList.contains("rel-strip")) updateRelArrows(); }, true);
+canvas.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-relscroll]"); if (!b) return;
+  e.stopPropagation();
+  const strip = b.parentElement.querySelector(".rel-strip");
+  strip.scrollBy({ left: Number(b.dataset.relscroll) * Math.max(250, strip.clientWidth * 0.8), behavior: "smooth" });
+}, true);
 
 function heroHTML(a, nops, neds, d = null) {
   const x = d ? heroExtrasHTML(d) : { pills: "", genres: "" };
@@ -1209,18 +1229,41 @@ function animateLayout(change, anchorId = null) {
   const first = new Map();
   for (const el of canvas.querySelectorAll(".card,.poster")) first.set(key(el), el.getBoundingClientRect());
   const scTop = scroller.getBoundingClientRect().top;
-  let anchorKey = anchorId != null && first.has("v" + anchorId) ? "v" + anchorId : null;
-  if (!anchorKey) {
-    for (const [k, r] of first) if (r.bottom > scTop + 4) { anchorKey = k; break; }
+  // the anchor: the card to keep in place (the given one, else the topmost visible card). A song can be on the page
+  // twice (For You: a type section and "Everything"), so remember WHICH copy by its position in the list
+  const pick = (id) => {
+    let found = null, best = Infinity;
+    for (const el of canvas.querySelectorAll(".card,.poster")) {
+      if (id != null && el.dataset.id !== String(id)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.bottom <= scTop + 4 && id == null) continue;
+      const d = Math.abs(r.top - scTop);
+      if (d < best) { best = d; found = el; }
+    }
+    return found;
+  };
+  const anchorEl = (anchorId != null ? pick(anchorId) : null) || pick(null);
+  const anchorKey = anchorEl ? key(anchorEl) : null;
+  const anchorRel = anchorEl ? anchorEl.getBoundingClientRect().top - scTop : null;
+  let anchorPos = null;                // index in S.flat of the anchor's copy
+  if (anchorEl) {
+    for (const [ri, el] of V.live) {
+      const j = [...el.querySelectorAll(".card,.poster")].indexOf(anchorEl);
+      if (j >= 0 && V.rows[ri] && V.rows[ri].start != null) { anchorPos = V.rows[ri].start + j; break; }
+    }
   }
-  const anchorRel = anchorKey ? first.get(anchorKey).top - scTop : null;
 
   change();
   lastW = canvas.clientWidth;          // the ResizeObserver must not re-render a second time
   relayout();
   if (anchorKey) {
-    const flatIdx = anchorKey[0] === "v" ? S.flat.findIndex((x) => x.id === Number(anchorKey.slice(1)))
-                                         : S.flat.findIndex((x) => x.id === Number(anchorKey.slice(1)));
+    const want = Number(anchorKey.slice(1));
+    let flatIdx = -1;
+    for (let i = 0; i < S.flat.length; i++) {         // the copy nearest to where the anchor was
+      if (S.flat[i].id !== want) continue;
+      if (flatIdx < 0 || anchorPos == null || Math.abs(i - anchorPos) < Math.abs(flatIdx - anchorPos)) flatIdx = i;
+      if (anchorPos == null) break;
+    }
     const row = V.rows.findIndex((r) => r.items && flatIdx >= r.start && flatIdx < r.start + r.items.length);
     if (row >= 0) {
       let top = Math.max(0, V.offsets[row] - anchorRel);
