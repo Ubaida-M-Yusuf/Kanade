@@ -1371,6 +1371,7 @@ function detailsHTML(v) {
         <button class="btn" data-act="reveal">${icon("folder")}Show in folder</button>
         <button class="btn" data-act="edit">${icon("edit")}Edit metadata</button>
         <button class="btn" data-act="preview">${icon("op")}Preview here</button>
+        ${v.mal_id ? `<button class="btn" data-ext="https://myanimelist.net/anime/${Number(v.mal_id)}" title="Open this series on MyAnimeList (in your browser)">${icon("link")}MyAnimeList</button>` : ""}
       </div>
       ${sugg && v.status === "review" ? `<div class="sugg"><b>Suggested match</b> (${Math.round(sugg.confidence * 100)}% via ${esc(sourceLabel(sugg.source))})<br>${esc(sugg.candidate.title_romaji)}${sugg.candidate.year ? ` (${sugg.candidate.year})` : ""}
         <div class="row-actions" style="margin-top:10px"><button class="btn sm primary" data-act="accept">${icon("check")}Accept</button><button class="btn sm" data-act="find">Find another…</button></div></div>` : ""}
