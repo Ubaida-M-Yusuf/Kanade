@@ -794,7 +794,7 @@ function setView(view, opts = {}) {
   S.view = view;
   if (opts.seriesId !== undefined) S.seriesId = opts.seriesId;
   // For You sorts by "Best match" by default; other views go back to the normal default
-  if (view === "foryou" && !wasForYou) { S.sortBeforeForYou = S.sort; setSort("match"); setSort("liked"); setSort(S.fyTab === "liked" ? "liked" : "match"); }
+  if (view === "foryou" && !wasForYou) { S.sortBeforeForYou = S.sort; setSort(S.fyTab === "liked" ? "liked" : "match"); }
   else if (view !== "foryou" && wasForYou) { setSort(S.sort === "match" || S.sort === "liked" ? (S.sortBeforeForYou && !["match", "liked"].includes(S.sortBeforeForYou) ? S.sortBeforeForYou : "title") : S.sort); }
   S.sel.clear(); S.anchor = null;
   for (const a of $$("#nav a")) a.classList.toggle("active", a.dataset.view === (view === "anime" ? "series" : view));
@@ -985,6 +985,7 @@ function renderVideoGrid() {
         S.fyTab = t.dataset.fytab; S.fyMemo = null;
         if (S.fyTab === "liked" && S.sort === "match") setSort("liked");
         else if (was === "liked" && S.sort === "liked") setSort("match");
+        else setSort(S.sort);                            // shows / hides "Date liked" for the new tab
         const m = S.fyTabScroll[S.fyTab];
         render(false);
         if (m && m.sig === fySig()) { scroller.scrollTop = m.top; paint(); }
@@ -2722,12 +2723,16 @@ function likedAt(v) {
 }
 function setSort(s) {
   const sel = $("#sortSel");
-  if (s === "liked" && !sel.querySelector('[value="liked"]')) (sel.querySelector('[value="match"]') || sel.firstElementChild).insertAdjacentHTML("afterend", `<option value="liked">Date liked</option>`);
-  if (s !== "liked" && S.view !== "foryou") sel.querySelector('[value="liked"]')?.remove();
-  if (s === "match" && !sel.querySelector('[value="match"]')) sel.insertAdjacentHTML("afterbegin", `<option value="match">Best match</option>`);
-  if (s !== "match" && S.view !== "foryou") sel.querySelector('[value="match"]')?.remove();
+  // "Date liked" exists only in For You ▸ Liked (everything else has no like date, so it would just sort by name)
+  const likedTab = S.view === "foryou" && S.fyTab === "liked";
+  if (s === "liked" && !likedTab) s = S.view === "foryou" ? "match" : "title";
   if (s === "relevance" && !sel.querySelector('[value="relevance"]')) sel.insertAdjacentHTML("afterbegin", `<option value="relevance">Relevance</option>`);
   if (s !== "relevance") sel.querySelector('[value="relevance"]')?.remove();
+  if ((s === "match" || S.view === "foryou") && !sel.querySelector('[value="match"]')) sel.insertAdjacentHTML("afterbegin", `<option value="match">Best match</option>`);
+  if (s !== "match" && S.view !== "foryou") sel.querySelector('[value="match"]')?.remove();
+  const lo = sel.querySelector('[value="liked"]');
+  if (likedTab && !lo) (sel.querySelector('[value="match"]') || sel.firstElementChild).insertAdjacentHTML("afterend", `<option value="liked">Date liked</option>`);
+  if (!likedTab && lo) lo.remove();
   S.sort = s; sel.value = s;
 }
 
