@@ -1,0 +1,1182 @@
+{
+ "about": "Identifications of AnimeThemes videos the catalogue doesn't link to a series (mostly game and visual-novel openings). Applied only to an exact copy (same file name and size) that is still unidentified; never to a video the user identified or corrected.",
+ "version": 1,
+ "series": [
+  {
+   "title_romaji": "Kyokugen Dasshutsu: 9-Jikan 9-Nin 9-no Tobira",
+   "title_english": "Zero Escape: Nine Hours, Nine Persons, Nine Doors",
+   "title_japanese": "極限脱出 9時間9人9の扉",
+   "year": 2009,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "9-nine-",
+   "title_english": "9-nine-",
+   "title_japanese": "9-nine-",
+   "year": 2017,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Aiyoku no Eustia",
+   "title_english": "Eustia of the Tarnished Wings",
+   "title_japanese": "穢翼のユースティア",
+   "year": 2011,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Ar tonelico: Sekai no Owari de Utai Tsuzukeru Shoujo",
+   "title_english": "Ar tonelico: Melody of Elemia",
+   "title_japanese": "アルトネリコ 世界の終わりで詩い続ける少女",
+   "year": 2006,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Ar tonelico II: Sekai ni Hibiku Shoujo-tachi no Sougaku",
+   "title_english": "Ar tonelico II: Melody of Metafalica",
+   "title_japanese": "アルトネリコ2 世界に響く少女たちの創造詩",
+   "year": 2007,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Ar tonelico III: Sekai Shuuen no Hikigane wa Shoujo no Uta ga Hiku",
+   "title_english": "Ar tonelico Qoga: Knell of Ar Ciel",
+   "title_japanese": "アルトネリコ3 世界終焉の引鉄は少女の詩が弾く",
+   "year": 2010,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Blade Strangers",
+   "title_english": "Blade Strangers",
+   "title_japanese": "ブレイドストレンジャーズ",
+   "year": 2018,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "BlazBlue: Calamity Trigger",
+   "title_english": "BlazBlue: Calamity Trigger",
+   "title_japanese": "ブレイブルー カラミティトリガー",
+   "year": 2008,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "BlazBlue: Centralfiction",
+   "title_english": "BlazBlue: Central Fiction",
+   "title_japanese": "ブレイブルー セントラルフィクション",
+   "year": 2015,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "BlazBlue: Chronophantasma",
+   "title_english": "BlazBlue: Chrono Phantasma",
+   "title_japanese": "ブレイブルー クロノファンタズマ",
+   "year": 2011,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "BlazBlue: Chronophantasma Extend",
+   "title_english": "BlazBlue: Chrono Phantasma Extend",
+   "title_japanese": "ブレイブルー クロノファンタズマ エクステンド",
+   "year": 2014,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "BlazBlue: Continuum Shift",
+   "title_english": "BlazBlue: Continuum Shift",
+   "title_japanese": "ブレイブルー コンティニュアムシフト",
+   "year": 2009,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "BlazBlue: Continuum Shift Extend",
+   "title_english": "BlazBlue: Continuum Shift Extend",
+   "title_japanese": "ブレイブルー コンティニュアムシフト エクステンド",
+   "year": 2011,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "BlazBlue: Continuum Shift II",
+   "title_english": "BlazBlue: Continuum Shift II",
+   "title_japanese": "ブレイブルー コンティニュアムシフト II",
+   "year": 2010,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "BlazBlue: Cross Tag Battle",
+   "title_english": "BlazBlue: Cross Tag Battle",
+   "title_japanese": "ブレイブルー クロスタッグバトル",
+   "year": 2018,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Chaos;Head",
+   "title_english": "Chaos;Head",
+   "title_japanese": "カオスヘッド",
+   "year": 2008,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Shin Sekaiju no Meikyuu 2: Fafnir no Kishi",
+   "title_english": "Etrian Odyssey 2 Untold: The Fafnir Knight",
+   "title_japanese": "新・世界樹の迷宮2 ファフニールの騎士",
+   "year": 2014,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Shin Sekaiju no Meikyuu: Millennium no Shoujo",
+   "title_english": "Etrian Odyssey Untold: The Millennium Girl",
+   "title_japanese": "新・世界樹の迷宮 ミレニアムの少女",
+   "year": 2013,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Fate/Grand Order",
+   "title_english": "Fate/Grand Order",
+   "title_japanese": "Fate/Grand Order",
+   "year": 2015,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Fate/hollow ataraxia",
+   "title_english": "Fate/hollow ataraxia",
+   "title_japanese": "Fate/hollow ataraxia",
+   "year": 2005,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Fate/stay night [Réalta Nua]",
+   "title_english": "Fate/stay night [Réalta Nua]",
+   "title_japanese": "Fate/stay night [Réalta Nua]",
+   "year": 2007,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Fate/stay night",
+   "title_english": "Fate/stay night",
+   "title_japanese": "Fate/stay night",
+   "year": 2004,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Fate/tiger colosseum",
+   "title_english": "Fate/tiger colosseum",
+   "title_japanese": "Fate/tiger colosseum",
+   "year": 2007,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Fate/tiger colosseum Upper",
+   "title_english": "Fate/tiger colosseum Upper",
+   "title_japanese": "Fate/tiger colosseum Upper",
+   "year": 2008,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Glove on Fight",
+   "title_english": "Glove on Fight",
+   "title_japanese": "グローブオンファイト",
+   "year": 2002,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Golden Hour",
+   "title_japanese": "ゴールデンアワー",
+   "year": 2017,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Grisaia no Kajitsu",
+   "title_english": "The Fruit of Grisaia",
+   "title_japanese": "グリザイアの果実",
+   "year": 2011,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Grisaia: Phantom Trigger",
+   "title_english": "Grisaia: Phantom Trigger",
+   "title_japanese": "グリザイア ファントムトリガー",
+   "year": 2017,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Chou Jijigen Game Neptune Re;Birth1",
+   "title_english": "Hyperdimension Neptunia Re;Birth1",
+   "title_japanese": "超次次元ゲイム ネプテューヌRe;Birth1",
+   "year": 2013,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Chou Jijigen Game Neptune Re;Birth2: Sisters Generation",
+   "title_english": "Hyperdimension Neptunia Re;Birth2: Sisters Generation",
+   "title_japanese": "超次次元ゲイム ネプテューヌRe;Birth2 SISTERS GENERATION",
+   "year": 2014,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Kami Jijigen Game Neptune Re;Birth3: V Century",
+   "title_english": "Hyperdimension Neptunia Re;Birth3: V Generation",
+   "title_japanese": "神次次元ゲイム ネプテューヌRe;Birth3 V CENTURY",
+   "year": 2014,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Kirara Fantasia",
+   "title_english": "Kirara Fantasia",
+   "title_japanese": "きららファンタジア",
+   "year": 2017,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Kobatogaoka Koukou Joshi Glove-bu",
+   "title_english": "Glove on Fight 2: Gleam of Force",
+   "title_japanese": "小鳩ヶ丘高校女子ぐろ～部",
+   "year": 2008,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Kotonoha Amrilato",
+   "title_english": "Kotonoha Amrilato",
+   "title_japanese": "ことのはアムリラート",
+   "year": 2019,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Magia Record: Mahou Shoujo Madoka☆Magica Gaiden",
+   "title_english": "Magia Record: Puella Magi Madoka Magica Side Story",
+   "title_japanese": "マギアレコード 魔法少女まどか☆マギカ外伝",
+   "year": 2017,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Makai Wars",
+   "title_english": "Makai Wars",
+   "title_japanese": "魔界ウォーズ",
+   "year": 2018,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Melty Blood",
+   "title_english": "Melty Blood",
+   "title_japanese": "MELTY BLOOD",
+   "year": 2002,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Melty Blood: Type Lumina",
+   "title_english": "Melty Blood: Type Lumina",
+   "title_japanese": "MELTY BLOOD: TYPE LUMINA",
+   "year": 2021,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Naruto Shippuuden: Narutimate Storm 4",
+   "title_english": "Naruto Shippuden: Ultimate Ninja Storm 4",
+   "title_japanese": "NARUTO-ナルト- 疾風伝 ナルティメットストーム4",
+   "year": 2016,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Nora to Oujo to Noraneko Heart",
+   "title_english": "Nora, Princess, and Stray Cat",
+   "title_japanese": "ノラと皇女と野良猫ハート",
+   "year": 2016,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Okujou no Yurirei-san",
+   "title_japanese": "屋上の百合霊さん",
+   "year": 2014,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Otome*Domain",
+   "title_english": "Otome * Domain",
+   "title_japanese": "オトメ*ドメイン",
+   "year": 2016,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Persona 2: Batsu",
+   "title_english": "Persona 2: Eternal Punishment",
+   "title_japanese": "ペルソナ2 罰",
+   "year": 2000,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Persona 2: Tsumi",
+   "title_english": "Persona 2: Innocent Sin",
+   "title_japanese": "ペルソナ2 罪",
+   "year": 1999,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Persona 3: Dancing Moon Night",
+   "title_english": "Persona 3: Dancing in Moonlight",
+   "title_japanese": "ペルソナ3 ダンシング・ムーンナイト",
+   "year": 2018,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Persona 3 FES",
+   "title_english": "Persona 3 FES",
+   "title_japanese": "ペルソナ3 フェス",
+   "year": 2007,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Persona 3",
+   "title_english": "Persona 3",
+   "title_japanese": "ペルソナ3",
+   "year": 2006,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Persona 3 Portable",
+   "title_english": "Persona 3 Portable",
+   "title_japanese": "ペルソナ3 ポータブル",
+   "year": 2009,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Persona 4: The Ultimate in Mayonaka Arena",
+   "title_english": "Persona 4 Arena",
+   "title_japanese": "ペルソナ4 ジ・アルティメット イン マヨナカアリーナ",
+   "year": 2012,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Persona 4: The Ultimax Ultra Suplex Hold",
+   "title_english": "Persona 4 Arena Ultimax",
+   "title_japanese": "ペルソナ4 ジ・アルティマックス ウルトラスープレックスホールド",
+   "year": 2013,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Persona 4: Dancing All Night",
+   "title_english": "Persona 4: Dancing All Night",
+   "title_japanese": "ペルソナ4 ダンシング・オールナイト",
+   "year": 2015,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Persona 4",
+   "title_english": "Persona 4",
+   "title_japanese": "ペルソナ4",
+   "year": 2008,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Persona 4 The Golden",
+   "title_english": "Persona 4 Golden",
+   "title_japanese": "ペルソナ4 ザ・ゴールデン",
+   "year": 2012,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Persona 5: Dancing Star Night",
+   "title_english": "Persona 5: Dancing in Starlight",
+   "title_japanese": "ペルソナ5 ダンシング・スターナイト",
+   "year": 2018,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Persona 5",
+   "title_english": "Persona 5",
+   "title_japanese": "ペルソナ5",
+   "year": 2016,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Princess Evangile",
+   "title_english": "Princess Evangile",
+   "title_japanese": "プリンセスエヴァンジール",
+   "year": 2010,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Princess Evangile: W Happiness",
+   "title_english": "Princess Evangile: W Happiness",
+   "title_japanese": "プリンセスエヴァンジール W ハピネス",
+   "year": 2011,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Rara Magi",
+   "title_english": "Rara Magic",
+   "title_japanese": "ららマジ",
+   "year": 2017,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Root Double: Before Crime * After Days",
+   "title_english": "Root Double: Before Crime * After Days",
+   "title_japanese": "ルートダブル -Before Crime * After Days-",
+   "year": 2012,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Sakura Taisen 2: Kimi, Shinitamou Koto Nakare",
+   "title_english": "Sakura Wars 2: Thou Shalt Not Die",
+   "title_japanese": "サクラ大戦2 ～君、死にたもうことなかれ～",
+   "year": 1998,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Sakura Taisen V: Saraba, Itoshiki Hito yo",
+   "title_english": "Sakura Wars: So Long, My Love",
+   "title_japanese": "サクラ大戦V ～さらば愛しき人よ～",
+   "year": 2005,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Sakura Taisen",
+   "title_english": "Sakura Wars",
+   "title_japanese": "サクラ大戦",
+   "year": 1996,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Senran Kagura: Peach Beach Splash",
+   "title_english": "Senran Kagura: Peach Beach Splash",
+   "title_japanese": "閃乱カグラ PEACH BEACH SPLASH",
+   "year": 2017,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Megami Ibunroku Persona",
+   "title_english": "Revelations: Persona",
+   "title_japanese": "女神異聞録ペルソナ",
+   "year": 1996,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Steins;Gate",
+   "title_english": "Steins;Gate",
+   "title_japanese": "シュタインズ・ゲート",
+   "year": 2009,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Steins;Gate 0",
+   "title_english": "Steins;Gate 0",
+   "title_japanese": "シュタインズ・ゲート ゼロ",
+   "year": 2015,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Sword Art Online: Alicization Lycoris",
+   "title_english": "Sword Art Online: Alicization Lycoris",
+   "title_japanese": "ソードアート・オンライン アリシゼーション リコリス",
+   "year": 2020,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Sword Art Online: Alicization Rising Steel",
+   "title_english": "Sword Art Online: Alicization Rising Steel",
+   "title_japanese": "ソードアート・オンライン アリシゼーション・ライジングスティール",
+   "year": 2019,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Senki Zesshou Symphogear XD Unlimited",
+   "title_english": "Symphogear XD Unlimited",
+   "title_japanese": "戦姫絶唱シンフォギアXD UNLIMITED",
+   "year": 2017,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Tales of Graces f",
+   "title_english": "Tales of Graces f",
+   "title_japanese": "テイルズ オブ グレイセス エフ",
+   "year": 2010,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Tales of Symphonia: Ratatosk no Kishi",
+   "title_english": "Tales of Symphonia: Dawn of the New World",
+   "title_japanese": "テイルズ オブ シンフォニア -ラタトスクの騎士-",
+   "year": 2008,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Tales of Symphonia",
+   "title_english": "Tales of Symphonia",
+   "title_japanese": "テイルズ オブ シンフォニア",
+   "year": 2003,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Tales of Xillia",
+   "title_english": "Tales of Xillia",
+   "title_japanese": "テイルズ オブ エクシリア",
+   "year": 2011,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Tales of Xillia 2",
+   "title_english": "Tales of Xillia 2",
+   "title_japanese": "テイルズ オブ エクシリア2",
+   "year": 2012,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Tales of Zestiria",
+   "title_english": "Tales of Zestiria",
+   "title_japanese": "テイルズ オブ ゼスティリア",
+   "year": 2015,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Tokyo School Life",
+   "title_english": "Tokyo School Life",
+   "year": 2015,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Touhou Cannonball",
+   "title_english": "Touhou Cannonball",
+   "title_japanese": "東方キャノンボール",
+   "year": 2023,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "Tsukihime -A piece of blue glass moon-",
+   "title_english": "Tsukihime -A piece of blue glass moon-",
+   "title_japanese": "月姫 -A piece of blue glass moon-",
+   "year": 2021,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Utawarerumono: Futari no Hakuoro",
+   "title_english": "Utawarerumono: Mask of Truth",
+   "title_japanese": "うたわれるもの 二人の白皇",
+   "year": 2016,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Utawarerumono: Itsuwari no Kamen",
+   "title_english": "Utawarerumono: Mask of Deception",
+   "title_japanese": "うたわれるもの 偽りの仮面",
+   "year": 2015,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Wild Arms",
+   "title_english": "Wild Arms",
+   "title_japanese": "ワイルドアームズ",
+   "year": 1996,
+   "format": "Game"
+  },
+  {
+   "title_romaji": "XBlaze Code: Embryo",
+   "title_english": "XBlaze Code: Embryo",
+   "title_japanese": "エクスブレイズ コード:エンブリオ",
+   "year": 2013,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "XBlaze Lost: Memories",
+   "title_english": "XBlaze Lost: Memories",
+   "title_japanese": "エクスブレイズ ロスト:メモリーズ",
+   "year": 2015,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Yami to Hikari no Sanctuary",
+   "year": 2017,
+   "format": "Visual Novel"
+  },
+  {
+   "title_romaji": "Yuuki Yuuna wa Yuusha de Aru: Jukai no Kioku",
+   "title_japanese": "結城友奈は勇者である 樹海の記憶",
+   "year": 2014,
+   "format": "Game"
+  }
+ ],
+ "videos": [
+  {
+   "file": "9Jikan9Nin9NoTobira-OP1.webm",
+   "size": 37333475,
+   "series": 0
+  },
+  {
+   "file": "9Nine-OP1.webm",
+   "size": 27532332,
+   "series": 1
+  },
+  {
+   "file": "AiyokuNoEustia-OP1.webm",
+   "size": 42636190,
+   "series": 2
+  },
+  {
+   "file": "ArTonelicoGame-OP1.webm",
+   "size": 28889367,
+   "series": 3
+  },
+  {
+   "file": "ArTonelicoII-OP1.webm",
+   "size": 25202068,
+   "series": 4
+  },
+  {
+   "file": "ArTonelicoIII-OP1.webm",
+   "size": 86348906,
+   "series": 5
+  },
+  {
+   "file": "BladeStrangers-OP1.webm",
+   "size": 52897581,
+   "series": 6
+  },
+  {
+   "file": "BlazBlueCalamityTrigger-OP1.webm",
+   "size": 13885732,
+   "series": 7
+  },
+  {
+   "file": "BlazBlueCentralfiction-OP1.webm",
+   "size": 57724932,
+   "series": 8
+  },
+  {
+   "file": "BlazBlueChronophantasma-OP1.webm",
+   "size": 42998177,
+   "series": 9
+  },
+  {
+   "file": "BlazBlueChronophantasmaExtend-OP1.webm",
+   "size": 49506275,
+   "series": 10
+  },
+  {
+   "file": "BlazBlueContinuumShift-OP1.webm",
+   "size": 39674569,
+   "series": 11
+  },
+  {
+   "file": "BlazBlueContinuumShiftExtend-OP1.webm",
+   "size": 37270495,
+   "series": 12
+  },
+  {
+   "file": "BlazBlueContinuumShiftII-OP1.webm",
+   "size": 44348793,
+   "series": 13
+  },
+  {
+   "file": "BlazBlueCrossTagBattle-OP1.webm",
+   "size": 58657869,
+   "series": 14
+  },
+  {
+   "file": "ChaosHeadVN-OP1.webm",
+   "size": 32660468,
+   "series": 15
+  },
+  {
+   "file": "EtrianOdyssey2Untold-OP1.webm",
+   "size": 55854885,
+   "series": 16
+  },
+  {
+   "file": "EtrianOdysseyUntold-OP1.webm",
+   "size": 53660420,
+   "series": 17
+  },
+  {
+   "file": "FateGO-OP1.webm",
+   "size": 37427733,
+   "series": 18
+  },
+  {
+   "file": "FateHollowAtaraxia-OP1.webm",
+   "size": 35797108,
+   "series": 19
+  },
+  {
+   "file": "FateHollowAtaraxia-OP2.webm",
+   "size": 28638290,
+   "series": 19
+  },
+  {
+   "file": "FateStayNightRealtaNua-OP1.webm",
+   "size": 51888017,
+   "series": 20
+  },
+  {
+   "file": "FateStayNightRealtaNua-OP2.webm",
+   "size": 27166274,
+   "series": 20
+  },
+  {
+   "file": "FateStayNightRealtaNua-OP3.webm",
+   "size": 34035489,
+   "series": 20
+  },
+  {
+   "file": "FateStayNightRealtaNua-OP4.webm",
+   "size": 12908607,
+   "series": 20
+  },
+  {
+   "file": "FateStayNightRealtaNua-OP5.webm",
+   "size": 14245251,
+   "series": 20
+  },
+  {
+   "file": "FateStayNightRealtaNua-OP6.webm",
+   "size": 12783818,
+   "series": 20
+  },
+  {
+   "file": "FateStayNightVN-OP1.webm",
+   "size": 19493880,
+   "series": 21
+  },
+  {
+   "file": "FateStayNightVN-OP2.webm",
+   "size": 22647757,
+   "series": 21
+  },
+  {
+   "file": "FateTigerColosseum-OP1.webm",
+   "size": 13951733,
+   "series": 22
+  },
+  {
+   "file": "FateTigerColosseumUPPER-OP1.webm",
+   "size": 17829033,
+   "series": 23
+  },
+  {
+   "file": "GloveOnFight-OP1.webm",
+   "size": 23762438,
+   "series": 24
+  },
+  {
+   "file": "GoldenHour-OP1.webm",
+   "size": 23315206,
+   "series": 25
+  },
+  {
+   "file": "GrisaiaNoKajitsuVN-ED1a.webm",
+   "size": 20720867,
+   "series": 26
+  },
+  {
+   "file": "GrisaiaNoKajitsuVN-ED1b.webm",
+   "size": 5906225,
+   "series": 26
+  },
+  {
+   "file": "GrisaiaNoKajitsuVN-ED2.webm",
+   "size": 25673520,
+   "series": 26
+  },
+  {
+   "file": "GrisaiaNoKajitsuVN-ED3.webm",
+   "size": 51242941,
+   "series": 26
+  },
+  {
+   "file": "GrisaiaNoKajitsuVN-ED4.webm",
+   "size": 32775718,
+   "series": 26
+  },
+  {
+   "file": "GrisaiaNoKajitsuVN-OP1.webm",
+   "size": 36831037,
+   "series": 26
+  },
+  {
+   "file": "GrisaiaPhantomTriggerVN-OP1.webm",
+   "size": 19735339,
+   "series": 27
+  },
+  {
+   "file": "HyperdimensionNeptuniaReBirth1-OP1.webm",
+   "size": 28461692,
+   "series": 28
+  },
+  {
+   "file": "HyperdimensionNeptuniaReBirth2-OP1.webm",
+   "size": 24775976,
+   "series": 29
+  },
+  {
+   "file": "HyperdimensionNeptuniaReBirth3-OP1.webm",
+   "size": 21259563,
+   "series": 30
+  },
+  {
+   "file": "KiraraFantasia-OP1.webm",
+   "size": 42377979,
+   "series": 31
+  },
+  {
+   "file": "KiraraFantasia-OP2.webm",
+   "size": 35482222,
+   "series": 31
+  },
+  {
+   "file": "KobatogaokaKoukouJoshiGlove-OP1.webm",
+   "size": 24444336,
+   "series": 32
+  },
+  {
+   "file": "KotonohaAmrilato-OP1.webm",
+   "size": 17607465,
+   "series": 33
+  },
+  {
+   "file": "MadokaMagiaRecordGame-OP1.webm",
+   "size": 37647357,
+   "series": 34
+  },
+  {
+   "file": "MakaiWars-OP1.webm",
+   "size": 59174273,
+   "series": 35
+  },
+  {
+   "file": "MeltyBlood-OP1.webm",
+   "size": 11333019,
+   "series": 36
+  },
+  {
+   "file": "MeltyBlood-OP2.webm",
+   "size": 23348225,
+   "series": 36
+  },
+  {
+   "file": "MeltyBlood-OP3.webm",
+   "size": 5247253,
+   "series": 36
+  },
+  {
+   "file": "MeltyBloodTypeLumina-OP1.webm",
+   "size": 46673636,
+   "series": 37
+  },
+  {
+   "file": "NarutoShippudenUltimateNinjaStorm4-OP1.webm",
+   "size": 34626839,
+   "series": 38
+  },
+  {
+   "file": "NoratotoVN-OP1.webm",
+   "size": 40207426,
+   "series": 39
+  },
+  {
+   "file": "OkujouNoYurireiSan-ED1.webm",
+   "size": 79436819,
+   "series": 40
+  },
+  {
+   "file": "OkujouNoYurireiSan-OP1.webm",
+   "size": 28581713,
+   "series": 40
+  },
+  {
+   "file": "OtomeDomain-OP1.webm",
+   "size": 36788237,
+   "series": 41
+  },
+  {
+   "file": "Persona2EternalPunishment-OP1.webm",
+   "size": 11983098,
+   "series": 42
+  },
+  {
+   "file": "Persona2EternalPunishment-OP2.webm",
+   "size": 13567110,
+   "series": 42
+  },
+  {
+   "file": "Persona2InnocentSin-OP1.webm",
+   "size": 16004279,
+   "series": 43
+  },
+  {
+   "file": "Persona2InnocentSin-OP2.webm",
+   "size": 18621313,
+   "series": 43
+  },
+  {
+   "file": "Persona3DancingInMoonlight-ED1.webm",
+   "size": 35815890,
+   "series": 44
+  },
+  {
+   "file": "Persona3DancingInMoonlight-OP1.webm",
+   "size": 37562742,
+   "series": 44
+  },
+  {
+   "file": "Persona3FES-ED1.webm",
+   "size": 25873020,
+   "series": 45
+  },
+  {
+   "file": "Persona3FES-OP1.webm",
+   "size": 23454741,
+   "series": 45
+  },
+  {
+   "file": "Persona3Game-ED1.webm",
+   "size": 25332657,
+   "series": 46
+  },
+  {
+   "file": "Persona3Game-OP1.webm",
+   "size": 16196624,
+   "series": 46
+  },
+  {
+   "file": "Persona3Portable-OP1.webm",
+   "size": 13635725,
+   "series": 47
+  },
+  {
+   "file": "Persona4Arena-OP1.webm",
+   "size": 49720852,
+   "series": 48
+  },
+  {
+   "file": "Persona4ArenaUltimax-OP1.webm",
+   "size": 48325848,
+   "series": 49
+  },
+  {
+   "file": "Persona4DancingAllNight-ED1.webm",
+   "size": 64886199,
+   "series": 50
+  },
+  {
+   "file": "Persona4DancingAllNight-OP1.webm",
+   "size": 34953063,
+   "series": 50
+  },
+  {
+   "file": "Persona4Game-OP1.webm",
+   "size": 27780211,
+   "series": 51
+  },
+  {
+   "file": "Persona4TheGoldenGame-OP1.webm",
+   "size": 32201314,
+   "series": 52
+  },
+  {
+   "file": "Persona5DancingInStarlight-ED1.webm",
+   "size": 21754424,
+   "series": 53
+  },
+  {
+   "file": "Persona5DancingInStarlight-OP1.webm",
+   "size": 38981982,
+   "series": 53
+  },
+  {
+   "file": "Persona5Game-OP1.webm",
+   "size": 55266769,
+   "series": 54
+  },
+  {
+   "file": "PrincessEvangile-OP1.webm",
+   "size": 33815701,
+   "series": 55
+  },
+  {
+   "file": "PrincessEvangileWHappiness-OP1.webm",
+   "size": 29382301,
+   "series": 56
+  },
+  {
+   "file": "Raramagi-OP1.webm",
+   "size": 25544629,
+   "series": 57
+  },
+  {
+   "file": "RootW-OP1.webm",
+   "size": 37043741,
+   "series": 58
+  },
+  {
+   "file": "RootW-OP2.webm",
+   "size": 39455378,
+   "series": 58
+  },
+  {
+   "file": "SakuraTaisen2-OP1.webm",
+   "size": 18900996,
+   "series": 59
+  },
+  {
+   "file": "SakuraTaisen2-OP2.webm",
+   "size": 18584215,
+   "series": 59
+  },
+  {
+   "file": "SakuraTaisen2-OP3.webm",
+   "size": 19101238,
+   "series": 59
+  },
+  {
+   "file": "SakuraTaisenV-OP1.webm",
+   "size": 31760539,
+   "series": 60
+  },
+  {
+   "file": "SakuraTaisenVN-OP1.webm",
+   "size": 18236597,
+   "series": 61
+  },
+  {
+   "file": "SakuraTaisenVN-OP2.webm",
+   "size": 18251330,
+   "series": 61
+  },
+  {
+   "file": "SenranKaguraPeachBeachSplash-OP1.webm",
+   "size": 75955608,
+   "series": 62
+  },
+  {
+   "file": "ShinMegamiTenseiPersona-OP1.webm",
+   "size": 24064624,
+   "series": 63
+  },
+  {
+   "file": "SteinsGateVN-OP1.webm",
+   "size": 50728225,
+   "series": 64
+  },
+  {
+   "file": "SteinsGateZeroVN-OP1.webm",
+   "size": 43697953,
+   "series": 65
+  },
+  {
+   "file": "SwordArtOnlineAlicizationLycoris-OP1.webm",
+   "size": 40606342,
+   "series": 66
+  },
+  {
+   "file": "SwordArtOnlineAlicizationRisingSteel-OP1.webm",
+   "size": 26143199,
+   "series": 67
+  },
+  {
+   "file": "SymphogearXDUnlimited-OP1.webm",
+   "size": 37226239,
+   "series": 68
+  },
+  {
+   "file": "TalesOfGracesF-OP1.webm",
+   "size": 31428962,
+   "series": 69
+  },
+  {
+   "file": "TalesOfSymphoniaDawnOfTheNewWorld-OP1.webm",
+   "size": 40037201,
+   "series": 70
+  },
+  {
+   "file": "TalesOfSymphoniaGame-OP1.webm",
+   "size": 41576911,
+   "series": 71
+  },
+  {
+   "file": "TalesOfSymphoniaGame-OP2.webm",
+   "size": 36359099,
+   "series": 71
+  },
+  {
+   "file": "TalesOfXillia-OP1.webm",
+   "size": 40864776,
+   "series": 72
+  },
+  {
+   "file": "TalesOfXillia-OP1v2.webm",
+   "size": 43222514,
+   "series": 72
+  },
+  {
+   "file": "TalesOfXillia2-OP1.webm",
+   "size": 43039768,
+   "series": 73
+  },
+  {
+   "file": "TalesOfZestiriaGame-OP1.webm",
+   "size": 41368135,
+   "series": 74
+  },
+  {
+   "file": "TokyoSchoolLife-OP1.webm",
+   "size": 33194107,
+   "series": 75
+  },
+  {
+   "file": "TouhouCannonball-OP1.webm",
+   "size": 46115302,
+   "series": 76
+  },
+  {
+   "file": "TsukihimeAPieceOfBlueGlassMoon-ED1.webm",
+   "size": 86422476,
+   "series": 77
+  },
+  {
+   "file": "TsukihimeAPieceOfBlueGlassMoon-ED2.webm",
+   "size": 135105007,
+   "series": 77
+  },
+  {
+   "file": "TsukihimeAPieceOfBlueGlassMoon-OP1.webm",
+   "size": 75627883,
+   "series": 77
+  },
+  {
+   "file": "TsukihimeAPieceOfBlueGlassMoon-OP2.webm",
+   "size": 75564788,
+   "series": 77
+  },
+  {
+   "file": "UtawarerumonoFutariNoHakuoroVN-OP1.webm",
+   "size": 35524625,
+   "series": 78
+  },
+  {
+   "file": "UtawarerumonoItsuwariNoKamenVN-OP1.webm",
+   "size": 38636058,
+   "series": 79
+  },
+  {
+   "file": "WildArms-OP1.webm",
+   "size": 11136534,
+   "series": 80
+  },
+  {
+   "file": "XBlazeCodeEmbryo-OP1.webm",
+   "size": 44734688,
+   "series": 81
+  },
+  {
+   "file": "XBlazeLostMemories-OP1.webm",
+   "size": 45279968,
+   "series": 82
+  },
+  {
+   "file": "YamiToHikariNoSanctuary-OP1.webm",
+   "size": 28970713,
+   "series": 83
+  },
+  {
+   "file": "YuukiYuunaJukaiNoKioku-OP1.webm",
+   "size": 16618677,
+   "series": 84
+  }
+ ]
+}

@@ -9,7 +9,7 @@ a = Analysis(
     ["app.py"],
     pathex=["."],
     binaries=[],
-    datas=[("kanade/ui", "ui"), ("kanade/analyzer", "analyzer")],
+    datas=[("kanade/ui", "ui"), ("kanade/analyzer", "analyzer"), ("kanade/data", "data")],
     hiddenimports=collect_submodules("webview") + ["rapidfuzz.fuzz", "rapidfuzz.process"],
     excludes=["tkinter", "matplotlib", "numpy", "pandas", "PyQt5", "PySide6"],
     noarchive=False,

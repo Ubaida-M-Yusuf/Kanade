@@ -133,13 +133,28 @@ class JobManager:
             try:
                 activity.lower_thread_priority()
                 m.state, m.error, m.message = "running", None, ""
-                m.set(phase="MyAnimeList genres & themes", done=0, total=0, current="")
-                n = content.refresh_mal(cid, lambda d, t, msg: m.set(done=d, total=t, current=msg),
-                                        should_stop=self._stop.is_set)
+                total = 0
+                while not self._stop.is_set():
+                    m.set(phase="MyAnimeList genres & themes", current="")
+                    st = content.mal_status()
+                    base = st["done"] + st["waiting"]
+                    res = content.refresh_mal(cid, lambda d, t, msg: m.set(done=base + d, total=st["total"],
+                                                                         current=f"{base + d:,}/{st['total']:,} series"),
+                                              should_stop=self._stop.is_set)
+                    total += res["done"]
+                    if not res["paused"] or content.mal_status()["error"]:
+                        break
+                    # the site refused connections for a while: wait (visibly) and continue by itself
+                    from .net import http
+                    resume = max(time.time() + 600, http().host_free_at("api.myanimelist.net"))
+                    m.set(phase="MyAnimeList paused: the site is busy",
+                          current="continues at " + time.strftime("%H:%M", time.localtime(resume)))
+                    while time.time() < resume and not self._stop.is_set():
+                        time.sleep(2)
                 err = content.mal_status()["error"]
                 m.state, m.phase = ("error", "MyAnimeList") if err else ("idle", "")
                 m.error = err or None
-                m.message = err or (f"MyAnimeList: {n} series updated" if n else "")
+                m.message = err or (f"MyAnimeList: {total} series updated" if total else "")
             except Exception as e:
                 log.exception("MyAnimeList pass failed")
                 m.state, m.error, m.message = "error", str(e), f"MyAnimeList: {e}"
@@ -506,6 +521,11 @@ class JobManager:
     # ---------------------------------------------------------- steps
     def _match(self, ids):
         p = self.pipeline
+        try:                                   # videos identified once for everyone (shipped list): no review needed
+            from . import known
+            known.apply()
+        except Exception as e:
+            log.warning("shipped identifications skipped: %s", e)
         def covers_in_background():
             db.bump_library_version()
             threading.Thread(target=self._covers, kwargs={"quiet": True}, name="covers", daemon=True).start()

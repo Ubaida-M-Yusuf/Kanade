@@ -33,7 +33,7 @@ LIMITS = {
     "api.jikan.moe": (0.4, 55),
     "graphql.anilist.co": (2.1, 28),
     "kitsu.io": (0.5, 100),
-    "api.myanimelist.net": (0.35, 150),
+    "api.myanimelist.net": (1.0, 55),        # faster bursts get connections refused for a while
 }
 DEFAULT_LIMIT = (0.2, 240)
 
@@ -116,6 +116,10 @@ class Http:
 
     def host_available(self, host: str) -> bool:
         return time.time() >= self._down_until.get(host, 0)
+
+    def host_free_at(self, host: str) -> float:
+        """When a host that kept failing will be tried again (0 = now)."""
+        return self._down_until.get(host, 0)
 
     def _mark_fail(self, host: str):
         n = self._fails.get(host, 0) + 1

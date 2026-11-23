@@ -128,15 +128,16 @@ def mal_genres_of(content_json: str) -> list[str]:
     return list((_stored_sources(content_json).get("mal") or {}).get("genres") or [])
 
 
-def refresh_mal(client_id: str, progress=None, should_stop=lambda: False, on_start=None) -> int:
+def refresh_mal(client_id: str, progress=None, should_stop=lambda: False, on_start=None) -> dict:
     """Ask MyAnimeList for the genres / themes / rating of every series not asked yet (or long ago), saving every
     25 series; a quit or a network problem loses at most that, and the rest continues next time."""
+    result = {"done": 0, "left": 0, "paused": False}
     if not client_id:
-        return 0
+        return result
     rows = db.q("SELECT id, mal_id FROM anime WHERE mal_id IS NOT NULL AND (mal_at=0 OR (mal_at<0 AND mal_at>?)) "
                 "AND id IN (SELECT anime_id FROM v_video) ORDER BY mal_at DESC, id", (-(time.time() - RETRY_DAYS * 86400),))
     if not rows:
-        return 0
+        return result
     if on_start:
         on_start(len(rows))
     done, got = 0, {}
@@ -172,7 +173,8 @@ def refresh_mal(client_id: str, progress=None, should_stop=lambda: False, on_sta
                 log.warning("MyAnimeList refused the client ID")
                 break
             except Exception as e:
-                log.warning("MyAnimeList not reachable (%s); continuing next time", e)
+                log.warning("MyAnimeList not reachable (%s); pausing", e)
+                result["paused"] = True
                 break
             done += 1
             if len(got) >= 25:
@@ -184,7 +186,8 @@ def refresh_mal(client_id: str, progress=None, should_stop=lambda: False, on_sta
     finally:
         save()
     log.info("MyAnimeList genres fetched for %s series", done)
-    return done
+    result.update(done=done, left=len(rows) - done)
+    return result
 
 
 def _at_nsfw(node: dict) -> tuple[int, set[str]]:
