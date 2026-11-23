@@ -58,7 +58,14 @@ Everything works on **songs**: all versions, resolutions and creditless copies o
    artist with an earlier like about three times as often as other songs do.)
 4. **Similarity.** Closeness to the 3 nearest liked songs (keeps different tastes apart and works from the very
    first like) minus closeness to the nearest disliked song.
-5. The score is a blend of 3 and 4, shown as a percentile within the library.
+5. The score is the learned model plus 30 % of the similarity, shown as a percentile within the library.
+
+**Eras.** Openings of each era share a typical sound and look (digital animation, modern mixing). A taste learned
+mostly from one era would push every song of another era down, so for ranking the typical sound and look of each
+5-year era is removed: songs are compared with the songs of their own time, and the release year itself counts only a
+little. Measured on real later likes (train on the ratings before a point in time, look up the songs liked after it):
+later likes overall ranked at a median of about 900 instead of 1,000 (of 14,000), and later likes from 2018 on at about
+3,100 instead of 7,300. Finding liked-folder copies and the song types use the unadjusted sound.
 
 **Song types.** A song's type comes from its own sound, not from which liked songs it resembles. The AudioSet
 classifier (trained on human-labelled clips) scores how much a song sounds like exciting or angry music, metal,
@@ -86,7 +93,7 @@ training and test at once; percentile among all songs not used for training, 100
 A second test replays the real order of ratings: the model is trained on the likes made before a point in time
 and the songs liked afterwards are looked up in its ranking (about 14,000 songs). With artists and the new
 weights, those later likes ranked at a median of about 440–490 instead of 620–750, and 1.5–2× as many of them
-were in the top 100. Liking top picks still only raises the remaining top picks.
+were in the top 100. Liking some top picks keeps the remaining top picks at the top (in the test all stayed in the top 26).
 
 Favourites and likes weigh 3× a liked-folder file: favourites are often newer than liked folders, and without the
 extra weight held-out favourites ranked at a median of 71 instead of 81. Liking some of the top picks makes the

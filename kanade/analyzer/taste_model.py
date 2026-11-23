@@ -40,14 +40,16 @@ PARAMS = {
     "w_a": 1.0, "w_c": 0.6, "w_v": 1.0, "w_m": 1.2,     # block weights inside the learned model
     "w_r": 2.0,                                          # artist block (sound + look + genre mode only)
     "w_explicit": 3.0,                                   # a like / favourite weighs this much more than a liked-folder file
-    "year_w": 1.0,                                       # weight of the release year inside the story block
+    "year_w": 0.3,                                       # weight of the release year inside the story block
+    "era_bin": 5,                                        # sound / look are compared within 5-year eras (see load)
     "lam": 3e-3,                                         # L2 strength of the learned model
     "unl_ratio": 1.0,                                    # total weight of unrated songs vs liked songs
     "neg_w": 3.0,                                        # weight of one dislike (as strong as a like in the app)
     "knn_k": 3,
-    # final blend (z-scores). With 3+ liked songs the learned model alone ranked best (similarity added nothing in
-    # the held-out test); similarity is the ranking until then. Similarity to disliked songs always counts against.
-    "mix_model": 1.0, "mix_knn": 0.0, "mix_neg": 0.6,
+    # final blend (z-scores): the learned model plus some similarity to the closest liked songs (keeps separate
+    # tastes, e.g. older favourites and a few newer shows, from being averaged away); similarity is the whole
+    # ranking until there are 3 liked songs. Similarity to disliked songs always counts against.
+    "mix_model": 1.0, "mix_knn": 0.3, "mix_neg": 0.6,
     "twin_min": 0.60,                                    # centred MERT cosine to accept a named twin (measured: same
                                                          # recording 0.68-0.96, other songs of the series <= 0.44)
     "twin_audio_only": 0.93,                             # ... to accept a twin found by sound alone
@@ -88,6 +90,8 @@ class Data:
     song_title: list = field(default_factory=list)     # series title per song
     song_mood: np.ndarray = None          # (n_song, 527) AudioSet probabilities, NaN rows where not measured
     taste: list = field(default_factory=list)   # liked files: dict(path, name, A, C, V, clap, dsp, twin)
+    A_raw: np.ndarray = None              # A / C before the era adjustment: used to find liked-file twins (the
+    C_raw: np.ndarray = None              # thresholds were measured on these) and for song types
     video_rating: dict = field(default_factory=dict)   # video id -> (value, at)
     favs: dict = field(default_factory=dict)            # video id -> added_at
     twin_cands: dict = field(default_factory=dict)      # taste path -> [video ids] (from the app's name matching)
@@ -217,6 +221,7 @@ def load(features_db: sqlite3.Connection, library_db: sqlite3.Connection, model_
     for sidx, vs in acc.items():
         mood[sidx] = np.mean(vs, axis=0)
     d.song_mood = mood
+    _era_centre(d)
     for kind, key, a, c, v, name, dsp, md in rows:
         if kind != "taste":
             continue
@@ -260,6 +265,26 @@ def title_in_name(title, filename):
     return len(core) >= 5 and core in _squash(filename)
 
 
+def _era_centre(d: Data, p=PARAMS):
+    """Openings of each era share a typical sound and look (digital animation, modern mixing...). A taste learned
+    mostly from one era would push every song of another era down, so for ranking the typical sound / look of each
+    era (5-year bins) is removed: songs are compared with the songs of their own time. The release year still
+    counts a little through the story block. Measured on real later likes: songs from 2018 on rose from rank ~7,300
+    to ~3,100 (of 14,000), and later likes overall from ~1,000 to ~900."""
+    d.A_raw, d.C_raw = d.A, d.C
+    years = np.array([(m or {}).get("year") or 0 for m in d.song_meta])
+    era = np.where(years > 0, (years - 1960) // p["era_bin"], -1)
+    out = []
+    for X in (d.A, d.C, d.V):
+        X = X.copy()
+        for g in np.unique(era):
+            m = era == g
+            if g >= 0 and m.sum() > 30:
+                X[m] -= X[m].mean(axis=0)
+        out.append(l2(X).astype(np.float32))
+    d.A, d.C, d.V = out
+
+
 def find_twins(d: Data, p=PARAMS):
     """Liked file -> the library song that is the same opening (name candidates confirmed by sound)."""
     vid_index = {int(v): i for i, v in enumerate(d.vid)}
@@ -268,7 +293,7 @@ def find_twins(d: Data, p=PARAMS):
         cands = [d.song_of[vid_index[v]] for v in d.twin_cands.get(t["path"], []) if v in vid_index]
         if cands:
             cands = sorted(set(cands))
-            sims = d.A[cands] @ t["A"]
+            sims = d.A_raw[cands] @ t["A"]
             j = int(np.argmax(sims))
             if sims[j] >= p["twin_min"]:
                 t["twin"] = int(cands[j])
@@ -276,7 +301,7 @@ def find_twins(d: Data, p=PARAMS):
                 continue
         # no name match: an (almost) identical recording, or the same recording of a series named in the file
         # name (the app's name matching misses some fansub / YouTube names)
-        sims = d.A @ t["A"]
+        sims = d.A_raw @ t["A"]
         j = int(np.argmax(sims))
         t["closest"], t["closest_sim"] = j, float(sims[j])
         if sims[j] >= p["twin_audio_only"] or (
@@ -448,7 +473,7 @@ def song_types(d: Data, labels):
         return None, None, {"types": f"waiting ({int(meas.sum())} songs measured)"}
     e = np.full(len(d.keys), np.nan)
     e[meas] = energy_from_mood(d.song_mood[meas], labels)
-    X = np.concatenate([d.A, d.C], axis=1)
+    X = np.concatenate([d.A_raw, d.C_raw], axis=1)
     loose = [t for t in d.taste if t["twin"] is None]
     info = {"types_measured": int(meas.sum()), "types_predicted": int((~meas).sum())}
     if (~meas).any() or any(t["mood"] is None for t in loose):
