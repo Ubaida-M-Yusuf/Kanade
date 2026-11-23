@@ -64,6 +64,8 @@ class JobManager:
         from . import recommend
         self.recs = Progress("For You")
         self.copy = Progress("Copy")
+        self.mal = Progress("MyAnimeList")       # genres / themes from MyAnimeList (own thread: never holds up scans)
+        self._mal_lock = threading.Lock()
         self.engine = recommend.EngineRunner(self.recs)
         self._rank_timer: threading.Timer | None = None
         self._rank_lock = threading.Lock()
@@ -75,7 +77,7 @@ class JobManager:
     # ---------------------------------------------------------- public API
     def status(self) -> dict:
         return {"pipeline": self.pipeline.as_dict(), "thumbs": self.thumbs.as_dict(), "recs": self.recs.as_dict(),
-                "copy": self.copy.as_dict(),
+                "copy": self.copy.as_dict(), "mal": self.mal.as_dict(),
                 "library_version": db.version("library"), "media_version": db.version("media"),
                 "recs_version": db.version("recs"), "last_scan": self.last_scan,
                 # other windows of the app use these to pick up likes / favourites and settings changed elsewhere
@@ -116,6 +118,34 @@ class JobManager:
     def idle(self) -> bool:
         return (self.pipeline.state != "running" and self.thumbs.state != "running"
                 and self._q.empty() and not self._thumb_wake.is_set())
+
+    def start_mal(self):
+        """Fetch MyAnimeList genres for series not asked yet, in the background (needs the user's client ID)."""
+        cid = (settings().get("mal_client_id") or "").strip()
+        if not cid or self._mal_lock.locked():
+            return
+        from . import content
+
+        def run():
+            if not self._mal_lock.acquire(blocking=False):
+                return
+            m = self.mal
+            try:
+                activity.lower_thread_priority()
+                m.state, m.error, m.message = "running", None, ""
+                m.set(phase="MyAnimeList genres & themes", done=0, total=0, current="")
+                n = content.refresh_mal(cid, lambda d, t, msg: m.set(done=d, total=t, current=msg),
+                                        should_stop=self._stop.is_set)
+                err = content.mal_status()["error"]
+                m.state, m.phase = ("error", "MyAnimeList") if err else ("idle", "")
+                m.error = err or None
+                m.message = err or (f"MyAnimeList: {n} series updated" if n else "")
+            except Exception as e:
+                log.exception("MyAnimeList pass failed")
+                m.state, m.error, m.message = "error", str(e), f"MyAnimeList: {e}"
+            finally:
+                self._mal_lock.release()
+        threading.Thread(target=run, name="mal", daemon=True).start()
 
     def submit(self, kind: str, **kw):
         names = [k for k, _ in list(self._q.queue)]
@@ -263,6 +293,7 @@ class JobManager:
                 self._job_fill_content()
             except Exception as e:
                 log.warning("content ratings skipped: %s", e)
+        self.start_mal()
         self.request_recs("analyze")
         if settings().get("use_anilist"):
             try:

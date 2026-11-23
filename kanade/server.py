@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from . import APP_NAME, __version__, activity, catalog, db, library, media, recommend, search
+from . import APP_NAME, __version__, activity, catalog, content, db, library, media, recommend, search
 from .config import data_dir, resource_dir, settings
 from .jobs import manager
 from .net import HostDown
@@ -114,6 +114,7 @@ def api_get(path: str, qs: dict):
                 "tools": media.tools_status(), "counts": counts_cached(),
                 "catalog": {"size": catalog.catalog_size(), "age_days": catalog.catalog_age_days()},
                 "data_dir": str(data_dir()), "status": manager().status(), "taste": recommend.engine_status(),
+                "mal": content.mal_status(),
                 "root_exists": bool(settings().get("archive_root")) and os.path.isdir(settings().get("archive_root"))}
     if path == "/api/videos":
         return RawJSON(videos_payload())
@@ -298,7 +299,11 @@ def api_post(path: str, body: dict):
         return {"ok": True, "accepted": n}
     if path == "/api/settings":
         before = settings().get("archive_root")
+        mal_before = settings().get("mal_client_id")
         settings().update(body or {})
+        if settings().get("mal_client_id") != mal_before:
+            db.meta_set("mal_error", "")
+            jm.start_mal()                    # new MyAnimeList client ID: start fetching right away
         db.bump("settings")
         if settings().get("archive_root") != before and settings().get("archive_root"):
             jm.submit("scan")

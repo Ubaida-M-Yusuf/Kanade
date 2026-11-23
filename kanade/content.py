@@ -4,7 +4,11 @@ Sources (any one is enough, so little slips through):
   * AniList  - "Ecchi" / "Hentai" genres, the isAdult flag, tags in the "Sexual Content" category (or adult tags)
   * Kitsu    - nsfw flag, age rating R18, rating notes that mention nudity / sexual content
   * AnimeThemes - NSFW marks on individual opening/ending videos (also flags the video itself)
-MyAnimeList genres (Ecchi / Hentai / Erotica) are added when Jikan is reachable.
+  * MyAnimeList - genres / themes (Ecchi, Hentai, Erotica, Gore, Horror) and the Rx rating, with the user's own
+    client ID (Settings). MyAnimeList only ADDS: every mark the other sources give stays.
+
+A second mark, gore / horror ("dark": 2 gore, 1 horror only), comes from MyAnimeList's Gore / Horror genres, AniList's
+Horror genre and AniList's Gore / Body Horror / Torture / Cannibalism tags.
 """
 from __future__ import annotations
 
@@ -14,7 +18,7 @@ import re
 import time
 
 from . import catalog, db
-from .sources import anilist, kitsu
+from .sources import anilist, kitsu, mal
 
 log = logging.getLogger("kanade.content")
 
@@ -22,8 +26,14 @@ SEXUAL_RANK = 40                 # AniList tag relevance (0-100) needed for a se
 GUIDE_RE = re.compile(r"nudity|sexual|ecchi|fan ?service|erotic", re.I)
 
 
-def classify(src: dict) -> tuple[int, int, list[str]]:
-    """(suggestive, explicit, reasons) from the collected source data."""
+RULES_VERSION = "2"             # bump when the rules below change: every series is re-marked (offline)
+GORE_TAGS = ("Gore", "Body Horror", "Torture", "Cannibalism")
+MAL_DAYS = 180                  # MyAnimeList genres are asked again after this many days
+
+
+def classify(src: dict, genres=(), tags=()) -> tuple[int, int, int, list[str], list[str]]:
+    """(suggestive, explicit, dark, reasons, dark_reasons) from the collected source data plus the stored AniList
+    genres / tags. Every source can only add a mark."""
     reasons, explicit = [], False
     al = src.get("anilist") or {}
     if al.get("adult"):
@@ -42,15 +52,136 @@ def classify(src: dict) -> tuple[int, int, list[str]]:
         reasons.append(f"Kitsu: {'NSFW' if ki.get('nsfw') else ''} {ki.get('age', '')}".strip())
     elif GUIDE_RE.search(ki.get("guide") or ""):
         reasons.append(f"Kitsu: {ki.get('guide')}")
-    if src.get("mal_genres"):
-        hits = [g for g in src["mal_genres"] if g in ("Ecchi", "Hentai", "Erotica")]
-        if hits:
-            reasons.append("MyAnimeList: " + ", ".join(hits))
-            explicit = explicit or any(g in ("Hentai", "Erotica") for g in hits)
+    m = src.get("mal") or {}
+    mal_genres = m.get("genres") or src.get("mal_genres") or []
+    hits = [g for g in mal_genres if g in ("Ecchi", "Hentai", "Erotica")]
+    if hits:
+        reasons.append("MyAnimeList: " + ", ".join(hits))
+        explicit = explicit or any(g in ("Hentai", "Erotica") for g in hits)
+    if (m.get("rating") or "").lower() == "rx":
+        explicit = True
+        reasons.append("MyAnimeList rating: Rx (hentai)")
     suggestive = bool(reasons)
     if src.get("at_nsfw"):           # informational only: AnimeThemes also marks gore / flashing images NSFW
         reasons.append(f"AnimeThemes: {src['at_nsfw']} video(s) marked NSFW")
-    return int(suggestive), int(explicit), reasons
+    # gore / horror
+    dark_reasons, gore = [], False
+    mg = [g for g in mal_genres if g in ("Gore", "Horror")]
+    if mg:
+        dark_reasons.append("MyAnimeList: " + ", ".join(mg))
+        gore = gore or "Gore" in mg
+    al_genres = set((src.get("anilist") or {}).get("genres") or []) | set(genres or [])
+    if "Horror" in al_genres:
+        dark_reasons.append("AniList genre: Horror")
+    gt = [t for t in GORE_TAGS if t in set(tags or [])]
+    if gt:
+        dark_reasons.append("AniList tags: " + ", ".join(gt))
+        gore = True
+    dark = 2 if gore else 1 if dark_reasons else 0
+    return int(suggestive), int(explicit), dark, reasons, dark_reasons
+
+
+def _apply(c, aid: int, src: dict, genres_json: str, tags_json: str, extra_sets: str = "", extra_args=()):
+    """Store the sources and the combined marks of one series (c: a write transaction)."""
+    try:
+        genres, tags = json.loads(genres_json or "[]"), json.loads(tags_json or "[]")
+    except ValueError:
+        genres, tags = [], []
+    sug, exp, dark, reasons, dark_reasons = classify(src, genres, tags)
+    data = {**src, "reasons": reasons, "dark_reasons": dark_reasons}
+    c.execute(f"UPDATE anime SET content=?, suggestive=?, explicit=?, dark=?{extra_sets} WHERE id=?",
+              (json.dumps(data, ensure_ascii=False), sug, exp, dark, *extra_args, aid))
+
+
+def _stored_sources(content_json: str) -> dict:
+    try:
+        d = json.loads(content_json or "{}")
+    except ValueError:
+        d = {}
+    d.pop("reasons", None)
+    d.pop("dark_reasons", None)
+    return d
+
+
+def reclassify_all() -> int:
+    """Re-mark every series from what is already stored (offline, a second or so); used when the rules change."""
+    rows = db.q("SELECT id, content, genres, tags FROM anime WHERE id IN (SELECT anime_id FROM v_video)")
+    with db.tx() as c:
+        for r in rows:
+            _apply(c, r["id"], _stored_sources(r["content"]), r["genres"], r["tags"])
+    db.meta_set("content_rules", RULES_VERSION)
+    db.bump_library_version()
+    log.info("content marks re-applied to %s series (rules %s)", len(rows), RULES_VERSION)
+    return len(rows)
+
+
+def mal_status() -> dict:
+    r = db.q1("SELECT COUNT(*) total, SUM(mal_at>0) done FROM anime WHERE mal_id IS NOT NULL "
+              "AND id IN (SELECT anime_id FROM v_video)")
+    return {"total": r["total"] or 0, "done": r["done"] or 0, "error": db.meta_get("mal_error") or ""}
+
+
+def mal_genres_of(content_json: str) -> list[str]:
+    """MyAnimeList genres / themes stored for a series (shown next to the AniList ones; never replaces them)."""
+    return list((_stored_sources(content_json).get("mal") or {}).get("genres") or [])
+
+
+def refresh_mal(client_id: str, progress=None, should_stop=lambda: False, on_start=None) -> int:
+    """Ask MyAnimeList for the genres / themes / rating of every series not asked yet (or long ago), saving every
+    25 series; a quit or a network problem loses at most that, and the rest continues next time."""
+    if not client_id:
+        return 0
+    rows = db.q("SELECT id, mal_id FROM anime WHERE mal_id IS NOT NULL AND mal_at<? AND "
+                "id IN (SELECT anime_id FROM v_video) ORDER BY mal_at, id", (time.time() - MAL_DAYS * 86400,))
+    if not rows:
+        return 0
+    if on_start:
+        on_start(len(rows))
+    done, got = 0, {}
+
+    def save():
+        if not got:
+            return
+        ids = tuple(got)
+        cur = {r["id"]: r for r in db.q("SELECT id, content, genres, tags FROM anime WHERE id IN (%s)"
+                                        % ",".join("?" * len(ids)), ids)}
+        now = time.time()
+        with db.tx() as c:
+            for aid, info in got.items():
+                r = cur.get(aid)
+                if not r:
+                    continue
+                src = _stored_sources(r["content"])
+                if info is not None:
+                    src["mal"] = info
+                _apply(c, aid, src, r["genres"], r["tags"], ", mal_at=?", (now,))
+        got.clear()
+        db.bump_library_version()
+
+    try:
+        for r in rows:
+            if should_stop():
+                break
+            try:
+                got[r["id"]] = mal.anime_info(r["mal_id"], client_id)
+            except mal.Rejected:
+                db.meta_set("mal_error", "MyAnimeList refused the client ID: check it in Settings")
+                log.warning("MyAnimeList refused the client ID")
+                break
+            except Exception as e:
+                log.warning("MyAnimeList not reachable (%s); continuing next time", e)
+                break
+            done += 1
+            if len(got) >= 25:
+                save()
+            if progress:
+                progress(done, len(rows), "%d/%d series" % (done, len(rows)))
+        else:
+            db.meta_set("mal_error", "")
+    finally:
+        save()
+    log.info("MyAnimeList genres fetched for %s series", done)
+    return done
 
 
 def _at_nsfw(node: dict) -> tuple[int, set[str]]:
@@ -103,8 +234,10 @@ def refresh(progress=None, only_missing: bool = True, should_stop=lambda: False,
         marked = _refresh_video_marks(every)
         db.meta_set("content_marks_sig", sig)
     where = "content_at=0 AND " if only_missing else ""
-    rows = db.q(f"SELECT id, at_id, anilist_id, mal_id FROM anime WHERE {where}id IN (SELECT anime_id FROM v_video) "
-                "ORDER BY id")
+    if db.meta_get("content_rules") != RULES_VERSION:
+        reclassify_all()
+    rows = db.q(f"SELECT id, at_id, anilist_id, mal_id, content, genres, tags FROM anime WHERE {where}"
+                "id IN (SELECT anime_id FROM v_video) ORDER BY id")
     total, done, updated = len(rows), 0, 0
     if total and on_start:
         on_start(total)                       # only now is there something to fetch (and a progress bar to show)
@@ -114,12 +247,14 @@ def refresh(progress=None, only_missing: bool = True, should_stop=lambda: False,
         chunk = rows[i:i + CHUNK]
         src, complete = _collect(chunk)
         now = time.time()
+        by_id = {r["id"]: r for r in chunk}
         with db.tx() as c:
             for aid, s in src.items():
-                sug, exp, reasons = classify(s)
-                c.execute("UPDATE anime SET content=?, suggestive=?, explicit=?, content_at=? WHERE id=?",
-                          (json.dumps({**s, "reasons": reasons}, ensure_ascii=False), sug, exp,
-                           now if complete else 0, aid))
+                r = by_id[aid]
+                old = _stored_sources(r["content"])
+                if "mal" in old:                     # MyAnimeList data is kept (it is fetched separately)
+                    s = {**s, "mal": old["mal"]}
+                _apply(c, aid, s, r["genres"], r["tags"], ", content_at=?", (now if complete else 0,))
         updated += len(src)
         done += len(chunk)
         db.bump_library_version()

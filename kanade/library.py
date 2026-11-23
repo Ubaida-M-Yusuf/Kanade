@@ -44,10 +44,34 @@ def list_anime() -> list[dict]:
                    COALESCE(ao.title_japanese, a.title_japanese) AS title_japanese,
                    COALESCE(ao.year, a.year) AS year, COALESCE(ao.season, a.season) AS season, a.format,
                    a.cover_path IS NOT NULL AS has_cover, v.ops, v.eds, v.videos, v.favs, v.added, v.folders,
-                   a.genres, a.tags, a.suggestive, a.explicit
+                   a.genres, a.tags, a.suggestive, a.explicit, a.dark, a.content
                    FROM v JOIN anime a ON a.id = v.anime_id
                    LEFT JOIN anime_override ao ON ao.anime_id = a.id""")
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["genres"] = json.dumps(merged_genres(d.get("genres"), d.pop("content", None), d.get("tags")), ensure_ascii=False)
+        out.append(d)
+    return out
+
+
+def merged_genres(genres_json, content_json, tags_json=None) -> list[str]:
+    """AniList genres plus the MyAnimeList genres / themes AniList doesn't have, as a genre or a tag (MyAnimeList
+    only adds)."""
+    from .content import mal_genres_of
+
+    def as_list(x):
+        try:
+            return list(json.loads(x or "[]")) if isinstance(x, str) or x is None else list(x)
+        except ValueError:
+            return []
+    g = as_list(genres_json)
+    have = {x.lower() for x in g} | {x.lower() for x in as_list(tags_json)}
+    for x in mal_genres_of(content_json):
+        if x.lower() not in have:
+            g.append(x)
+            have.add(x.lower())
+    return g
 
 
 def anime_detail(anime_id: int) -> dict | None:
@@ -63,7 +87,7 @@ def anime_detail(anime_id: int) -> dict | None:
     d["display_year"] = d["o_year"] or d["year"]
     d["display_season"] = d["o_season"] or d["season"]
     d["synonyms"] = json.loads(d["synonyms"] or "[]")
-    d["genres"] = json.loads(d.get("genres") or "[]")
+    d["genres"] = merged_genres(d.get("genres"), d.get("content"), d.get("tags"))
     d["tags"] = json.loads(d.get("tags") or "[]")
     d["video_ids"] = [r["id"] for r in db.q(
         "SELECT id FROM v_video WHERE anime_id=? AND missing=0 ORDER BY type DESC, number, part, version", (anime_id,))]
@@ -243,11 +267,12 @@ def video_detail(video_id: int) -> dict | None:
         return None
     d = dict(r)
     d["synonyms"] = json.loads(d["synonyms"] or "[]")
-    d["genres"] = json.loads(d.get("anime_genres") or "[]")
+    d["genres"] = merged_genres(d.get("anime_genres"), d.get("content"), d.get("anime_tags"))
     try:
-        d["content_reasons"] = json.loads(d.get("content") or "{}").get("reasons", [])
+        c = json.loads(d.get("content") or "{}")
+        d["content_reasons"], d["dark_reasons"] = c.get("reasons", []), c.get("dark_reasons", [])
     except ValueError:
-        d["content_reasons"] = []
+        d["content_reasons"], d["dark_reasons"] = [], []
     d["tags"] = json.loads(d.get("anime_tags") or "[]")
     d["suggestion"] = json.loads(d["suggestion"]) if d["suggestion"] else None
     o = db.q1("SELECT * FROM user_override WHERE video_id=?", (video_id,))

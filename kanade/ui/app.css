@@ -566,6 +566,7 @@ select option { background: var(--surface-2); }
 .crow .seg { height: 34px; flex: none; }
 .cflag { margin-left: 6px; font-size: 10.5px; font-weight: 800; padding: 0 6px; border-radius: 5px; color: #ffd1e6; background: rgba(244,114,182,.18); }
 .cflag.x { color: #fecaca; background: rgba(248,113,113,.22); }
+.cflag.d { color: #e5e7eb; background: rgba(120,113,108,.38); }
 .achip.content { color: #ffd1e6; border-color: rgba(244,114,182,.45); background: rgba(244,114,182,.13); }
 
 /* ---- related series strip (series page) */

@@ -38,7 +38,7 @@ const S = {
   q: "", searchIds: null, searchRank: null,
   filters: { type: "", year: "", series: "", num: "", fav: false, artist: "", genres: new Set(), genreMode: "any",
              formats: new Set(), seasons: new Set(), quality: new Set(), lyrics: false, original: false,
-             content: { sug: "", exp: "", nsfw: "" } },
+             content: { sug: "", exp: "", dark: "", nsfw: "" } },
   genreSearch: "", fTab: "type",
   genreIndex: new Map(),   // "Action" / "tag:Mecha" -> Set(anime ids)
   sort: "title", size: localStorage.getItem("kanade.size") || "m",
@@ -234,7 +234,7 @@ function animeFacetSet() {
   const g = genreAnimeSet();
   if (g) narrow(g);
   const cf = f.content || {};
-  for (const [k, col] of [["sug", "suggestive"], ["exp", "explicit"]]) {
+  for (const [k, col] of [["sug", "suggestive"], ["exp", "explicit"], ["dark", "dark"]]) {
     if (cf[k]) narrow(new Set(S.anime.filter((a) => (cf[k] === "only") === !!a[col]).map((a) => a.id)));
   }
   return set;
@@ -289,8 +289,9 @@ function activeFilterList() {
   for (const k of f.quality) out.push({ g: "quality", k, label: (QUALITY.find((q) => q[0] === k) || [0, k])[1] });
   if (f.lyrics) out.push({ g: "lyrics", k: "1", label: "Lyrics / subtitles" });
   if (f.original) out.push({ g: "original", k: "1", label: "Original versions only" });
-  const CL = { sug: ["Ecchi only", "No ecchi"], exp: ["18+ only", "No 18+"], nsfw: ["NSFW videos only", "No NSFW videos"] };
-  for (const k of ["sug", "exp", "nsfw"]) {
+  const CL = { sug: ["Ecchi only", "No ecchi"], exp: ["18+ only", "No 18+"], dark: ["Gore / horror only", "No gore / horror"],
+               nsfw: ["NSFW videos only", "No NSFW videos"] };
+  for (const k of ["sug", "exp", "dark", "nsfw"]) {
     const val = (f.content || {})[k];
     if (val) out.push({ g: "content", k, label: CL[k][val === "only" ? 0 : 1] });
   }
@@ -387,15 +388,17 @@ function renderFilterPanel() {
       ${shown.length ? `<div class="ggrid">${shown.map(([k, n]) => filterChip("genre", k, esc(gLabel(k)), n, f.genres.has(k))).join("")}</div>` : `<div class="loading">No tag matches “${esc(S.genreSearch)}”.</div>`}`;
   } else if (tab === "content") {
     const nSug = S.anime.filter((a) => a.suggestive).length, nExp = S.anime.filter((a) => a.explicit).length;
+    const nDark = S.anime.filter((a) => a.dark).length;
     const nNsfw = S.videos.filter((v) => v.nsfw).length;
     const row = (k, title, sub, n) => {
       const val = (f.content || {})[k] || "";
       return `<div class="crow"><div><b>${title}</b><small>${sub} · ${n.toLocaleString()}</small></div>
         <div class="seg">${[["", "Any"], ["only", "Only"], ["hide", "Hide"]].map(([v, l]) => `<button data-content="${k}" data-cval="${v}" class="${val === v ? "on" : ""}">${l}</button>`).join("")}</div></div>`;
     };
-    body = `<div class="gsec">Content <small>· combined from AniList, Kitsu and AnimeThemes</small></div>
+    body = `<div class="gsec">Content <small>· combined from AniList, Kitsu, AnimeThemes and MyAnimeList</small></div>
       ${row("sug", "Ecchi / suggestive", "series with ecchi, fan service or sexual content", nSug)}
       ${row("exp", "18+ / explicit", "series rated adult (subset of the above)", nExp)}
+      ${row("dark", "Gore / horror", "series with gore or horror (MyAnimeList genres, AniList genres and tags)", nDark)}
       ${row("nsfw", "NSFW opening/ending video", "the video itself is marked NSFW (nudity, gore or flashing)", nNsfw)}`;
   } else {
     const qCount = QUALITY.map((q) => S.videos.filter(q[2]).length);
@@ -450,7 +453,7 @@ function setGenre(g) {
 function clearAllFilters() {
   S.filters = { type: "", year: "", series: "", num: "", fav: false, artist: "", genres: new Set(), genreMode: S.filters.genreMode,
                 formats: new Set(), seasons: new Set(), quality: new Set(), lyrics: false, original: false,
-                content: { sug: "", exp: "", nsfw: "" } };
+                content: { sug: "", exp: "", dark: "", nsfw: "" } };
   S.genreSearch = "";
   $("#q").value = ""; S.q = ""; S.searchIds = null; S.searchRank = null;
   if (S.sort === "relevance") setSort("title");
@@ -709,7 +712,8 @@ function cardHTML(v, idx) {
         <button class="act fav${v.fav ? " on" : ""}" data-fav="${v.id}" title="Favorite (F)">${icon("heart")}</button></span>`;
   const song = v.song ? `${esc(v.song)}${v.artists ? ` <span class="artist">– ${artistLinks(v.artists, "alink quiet")}</span>` : ""}` : `<span class="artist">${v.status === "review" ? "Unidentified" : "Unknown song"}</span>`;
   const an = S.animeById.get(v.anime_id);
-  const flag = an && an.explicit ? `<span class="cflag x">18+</span>` : an && an.suggestive ? `<span class="cflag">Ecchi</span>` : "";
+  const flag = (an && an.explicit ? `<span class="cflag x">18+</span>` : an && an.suggestive ? `<span class="cflag">Ecchi</span>` : "") +
+    (an && an.dark ? `<span class="cflag d">${an.dark > 1 ? "Gore" : "Horror"}</span>` : "");
   let gtag = "";
   if (S.view === "foryou" && S.recGroups.length > 1) {
     const gi = bestGroup(S.rec.get(v.id));
@@ -1380,6 +1384,7 @@ function detailsHTML(v) {
         <dt>Year</dt><dd>${esc(v.year || "—")}${v.season ? " · " + esc(v.season) : ""}</dd>
         ${v.synonyms && v.synonyms.length ? `<dt>Also known as</dt><dd>${esc(v.synonyms.join(" · "))}</dd>` : ""}
         ${(v.content_reasons && v.content_reasons.length) || v.nsfw ? `<dt>Content</dt><dd>${v.explicit ? "<b>18+</b> · " : v.suggestive ? "<b>Ecchi / suggestive</b> · " : ""}${v.nsfw ? "this video is marked NSFW · " : ""}${esc((v.content_reasons || []).join(" · "))}</dd>` : ""}
+        ${v.dark_reasons && v.dark_reasons.length ? `<dt>Gore / horror</dt><dd><b>${v.dark > 1 ? "Gore" : "Horror"}</b> · ${esc(v.dark_reasons.join(" · "))}</dd>` : ""}
       </dl>${(v.genres && v.genres.length) || (v.tags && v.tags.length) ? `<div class="genres" style="margin-top:10px">${genrePills(v.genres, v.tags, 6)}</div>` : ""}</div>
       <div class="d-sec"><h4>File</h4><dl class="kv">
         <dt>Filename</dt><dd class="path">${esc(v.filename)}</dd>
@@ -2124,6 +2129,10 @@ async function renderSettings() {
     <div class="form-grid" style="margin-top:14px">
       <label class="check-row"><input type="checkbox" id="s_anilist" ${st.use_anilist ? "checked" : ""}> Use AniList for search and missing titles</label>
       <label class="check-row"><input type="checkbox" id="s_jikan" ${st.use_jikan ? "checked" : ""}> Use Jikan (MyAnimeList) for search</label>
+      <div class="field"><label>MyAnimeList client ID <small>· adds MyAnimeList genres and themes (Ecchi, Gore, Horror…) to every series; only ever adds to the AniList data</small></label>
+        <input id="s_mal" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your client ID (myanimelist.net ▸ Account Settings ▸ API)" value="${esc(st.mal_client_id || "")}">
+        <div class="status-line" style="margin-top:6px"><span class="dotc ${!st.mal_client_id ? "mid" : b.mal && b.mal.error ? "bad" : ""}"></span>${!st.mal_client_id ? "MyAnimeList: not connected"
+          : b.mal && b.mal.error ? esc(b.mal.error) : `MyAnimeList: ${(b.mal ? b.mal.done : 0).toLocaleString()} of ${(b.mal ? b.mal.total : 0).toLocaleString()} series fetched${b.mal && b.mal.done < b.mal.total ? " (continues in the background)" : ""}`}</div></div>
       <label class="check-row"><input type="checkbox" id="s_ollama" ${st.ollama_enabled ? "checked" : ""}> Use Ollama for ambiguous filenames</label>
       <div class="field half"><label>Ollama URL</label><input id="s_ourl" value="${esc(st.ollama_url)}"></div>
       <div class="field half"><label>Ollama model</label>${ol.models.length ? `<select id="s_omodel"><option value="">First available</option>${ol.models.map((mm) => `<option ${mm === st.ollama_model ? "selected" : ""}>${esc(mm)}</option>`).join("")}</select>` : `<input id="s_omodel" value="${esc(st.ollama_model)}" placeholder="e.g. llama3.1:8b">`}</div>
@@ -2174,6 +2183,7 @@ async function renderSettings() {
         const r = await api.post("/api/settings", {
           archive_root: $("#s_root").value.trim(), vlc_path: $("#s_vlc").value.trim(), hover_preview: $("#s_hover").checked,
           use_anilist: $("#s_anilist").checked, use_jikan: $("#s_jikan").checked, ollama_enabled: $("#s_ollama").checked,
+          mal_client_id: $("#s_mal").value.trim(),
           ollama_url: $("#s_ourl").value.trim(), ollama_model: $("#s_omodel").value.trim(), accept_confidence: Number($("#s_accept").value) || 0.85,
           workers: Number($("#s_workers").value) || 4, thumb_width: Number($("#s_tw").value) || 480,
           auto_rescan_minutes: Math.max(0, Number($("#s_rescan").value) || 0),
@@ -2602,6 +2612,7 @@ async function poll() {
   try {
     const st = await api.get("/api/status");
     $("#jobs").innerHTML = jobHTML("Library", st.pipeline) + jobHTML("Thumbnails", st.thumbs) + jobHTML("For You", st.recs) +
+      (st.mal && (st.mal.state === "running" || st.mal.state === "error") ? jobHTML("MyAnimeList", st.mal) : "") +
       (st.copy && st.copy.state === "running" ? jobHTML("Copy", st.copy) : "");
     if (S.copyWatch && st.copy && st.copy.state !== "running") { S.copyWatch = false; toast(st.copy.message || "Copy finished", st.copy.state === "error"); }
     const recWasRunning = S.recProgress && S.recProgress.state === "running";

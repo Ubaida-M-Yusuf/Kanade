@@ -54,6 +54,7 @@ DEFAULTS = {
     "hover_preview": True,
     "use_jikan": True,
     "use_anilist": True,
+    "mal_client_id": "",          # the user's own MyAnimeList API client ID (genres / themes / ratings); local only
     "catalog_max_age_days": 14,
     "card_size": "m",
     "auto_rescan_minutes": 30,   # re-check the archive for new/changed files while running (0 = off)

@@ -185,7 +185,7 @@ SELECT
     v.size, v.mtime, v.duration, v.width, v.height, v.thumb_state, v.thumb_path,
     v.match_source, v.confidence, v.status, v.suggestion, v.date_added, v.missing, v.duplicate_of,
     v.p_prefix, v.p_title, v.p_tags, v.theme_id, CAST(v.media_at AS INTEGER) AS media_at, v.nsfw AS nsfw,
-    a.suggestive AS suggestive, a.explicit AS explicit, a.content AS content,
+    a.suggestive AS suggestive, a.explicit AS explicit, a.dark AS dark, a.content AS content,
     a.id AS anime_id,
     COALESCE(o.type, t.type, v.p_type) AS type,
     COALESCE(o.number, t.number, v.p_number, 1) AS number,
@@ -284,6 +284,9 @@ def _migrate(conn):
         conn.execute("ALTER TABLE anime ADD COLUMN suggestive INTEGER NOT NULL DEFAULT 0")
         conn.execute("ALTER TABLE anime ADD COLUMN explicit INTEGER NOT NULL DEFAULT 0")
         conn.execute("ALTER TABLE anime ADD COLUMN content_at REAL NOT NULL DEFAULT 0")
+    if "dark" not in cols:    # gore / horror mark (2 gore, 1 horror) and when MyAnimeList was last asked
+        conn.execute("ALTER TABLE anime ADD COLUMN dark INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE anime ADD COLUMN mal_at REAL NOT NULL DEFAULT 0")
     if "genres" not in cols:  # AniList genres / tags (JSON arrays) and when they were fetched
         conn.execute("ALTER TABLE anime ADD COLUMN genres TEXT NOT NULL DEFAULT '[]'")
         conn.execute("ALTER TABLE anime ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'")

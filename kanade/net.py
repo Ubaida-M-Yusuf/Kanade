@@ -33,6 +33,7 @@ LIMITS = {
     "api.jikan.moe": (0.4, 55),
     "graphql.anilist.co": (2.1, 28),
     "kitsu.io": (0.5, 100),
+    "api.myanimelist.net": (0.35, 150),
 }
 DEFAULT_LIMIT = (0.2, 240)
 

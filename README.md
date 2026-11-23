@@ -157,7 +157,8 @@ FFmpeg is a separate program under the LGPL/GPL licence and is distributed along
 | Resolution | top-right badge on every card (4K, 1080p, 720p, 480p...) |
 | Series page from a video | **Open series** in the details panel, or right-click ▸ *Open series page* |
 | Series in its own window | right-click a card (or a series poster) ▸ *Open series in a new window*: a separate window with its own filters and selection, so the main window stays where it was. Likes, favourites and settings changed in one window show up in the others within seconds; a series window never changes the saved view preferences (card size, stacking, song type), and filters are never saved, so the app always starts unfiltered |
-| Ecchi / 18+ | *Filters ▸ Content* hides or shows suggestive and adult series (ratings combined from AniList, Kitsu and AnimeThemes) |
+| Ecchi / 18+ / gore | *Filters ▸ Content* hides or shows suggestive, adult and gore / horror series. Marks are combined from AniList (genres, tags, adult flag), Kitsu (age ratings), AnimeThemes (NSFW videos) and, optionally, MyAnimeList (genres and themes such as Ecchi, Gore, Horror). Each source can only add a mark; cards show *Ecchi*, *18+*, *Gore* or *Horror* |
+| MyAnimeList (optional) | paste your own MyAnimeList API client ID in *Settings ▸ Metadata sources* (myanimelist.net ▸ Account Settings ▸ API ▸ Create ID). Kanade then adds MyAnimeList's genres and themes to every series in the background (about 0.4 s per series, saved as it goes, re-checked every 6 months); they are added next to the AniList genres, never replacing them. The ID stays in your local settings |
 | Favourite | hover a card and click ♥, or press **F** (favourites also count as likes for For You) |
 | Multi-select | **Ctrl**+click, **Shift**+click, **Ctrl+A** (select all in the current view, e.g. For You ▸ Liked), or press on an empty spot and **drag a box** over cards (hold **Ctrl** to add to the selection; the list scrolls when you reach the edge) |
 | Songs by an artist | click a singer or band name (on a card or in the details panel), or right-click ▸ *More by …*: every opening and ending they sang, across all series. The *Artist* chip under the title removes the filter |
@@ -355,7 +356,7 @@ kanade/media.py       FFmpeg probe, thumbnails, cover cache
 kanade/search.py      FTS5 search
 kanade/library.py     listings, favourites, ratings, corrections, related series, playback
 kanade/jobs.py        background pipeline and thumbnail worker pool
-kanade/content.py     content ratings (AniList, Kitsu, AnimeThemes)
+kanade/content.py     content marks: ecchi / 18+ / gore (AniList, Kitsu, AnimeThemes, MyAnimeList)
 kanade/activity.py    steps background work aside while a video plays
 kanade/recommend.py   For You engine install, supervision and results
 kanade/tastematch.py  matches liked-folder files to library videos by name
