@@ -82,6 +82,8 @@ REL_LABELS = {"PREQUEL": "Prequel", "SEQUEL": "Sequel", "PARENT": "Main story", 
 FRANCHISE_RELS = {"PREQUEL", "SEQUEL", "PARENT", "SIDE_STORY", "SPIN_OFF", "ALTERNATIVE", "SUMMARY",
                   "COMPILATION", "CONTAINS"}
 FRANCHISE_MAX = 60
+MISSING_RELS = ["PREQUEL", "SEQUEL", "PARENT", "ALTERNATIVE", "SIDE_STORY", "SPIN_OFF"]   # shown when not in the library
+MISSING_MAX = 12
 SEASON_MONTH = {"WINTER": 1, "SPRING": 4, "SUMMER": 7, "FALL": 10}
 _graph_lock = threading.Lock()
 _graph: dict = {"ver": None}
@@ -213,17 +215,26 @@ def related_series(anime_id: int) -> dict:
             return {"id": out[j]["id"], "title": out[j]["title"], "label": "Previous" if step < 0 else "Next"}
         return None
 
+    # entries that are not in the library: those of the WHOLE franchise (not only the current series' own relations),
+    # so the strip shows the same entries from every series of it. Each says what it relates to ("Sequel of X").
     have = set(g["local"])
-    missing = []
-    for e in g["edges"].get(anime_id, []):
-        if e["rel"] in ("PREQUEL", "SEQUEL", "PARENT", "SIDE_STORY", "ALTERNATIVE", "SPIN_OFF") and e["al"] not in have \
-                and e.get("format") not in ("MUSIC",):
-            missing.append({"title": e.get("title"), "title_english": e.get("en"), "year": e.get("year"),
-                            "format": e.get("format"), "rel": REL_LABELS.get(e["rel"], "Related"), "al": e["al"],
-                            "order": ["PREQUEL", "SEQUEL", "PARENT", "ALTERNATIVE", "SIDE_STORY", "SPIN_OFF"].index(e["rel"])})
-    missing.sort(key=lambda m: (m["order"], m["year"] or 9999))
+    titles = {r["id"]: r["title"] for r in rows}
+    found: dict[int, dict] = {}
+    for lid in sorted(ids, key=lambda i: (i != anime_id, depth.get(g["own"].get(i), 99))):   # closest first
+        for e in g["edges"].get(lid, []):
+            if e["rel"] not in MISSING_RELS or e["al"] in have or e.get("format") in ("MUSIC",) or e["al"] in found:
+                continue
+            label = REL_LABELS.get(e["rel"], "Related")
+            found[e["al"]] = {"title": e.get("title"), "title_english": e.get("en"), "year": e.get("year"),
+                              "format": e.get("format"), "al": e["al"],
+                              "rel": label, "of": None if lid == anime_id else (titles.get(lid) or "another entry"),
+                              "near": (lid != anime_id, depth.get(g["own"].get(lid), 99), MISSING_RELS.index(e["rel"]))}
+    missing = sorted(found.values(), key=lambda m: m["near"])[:MISSING_MAX]
+    missing.sort(key=lambda m: (m["year"] or 9999, m["title"] or ""))     # shown in release order, like the rest
+    for m in missing:
+        m.pop("near")
     return {"franchise": out if len(out) > 1 else [], "prev": pick("PREQUEL", -1), "next": pick("SEQUEL", 1),
-            "related_missing": missing[:8]}
+            "related_missing": missing}
 
 
 def video_detail(video_id: int) -> dict | None:
