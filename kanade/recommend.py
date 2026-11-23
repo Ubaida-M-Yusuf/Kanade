@@ -187,6 +187,12 @@ def engine_status() -> dict:
             tc = con.execute("SELECT value FROM meta WHERE key='taste_count'").fetchone()
             st["rank_at"] = rk[0] if rk else None
             st["taste_count"] = int(tc[0]) if tc else 0
+            rs = con.execute("SELECT value FROM meta WHERE key='rank_summary'").fetchone()
+            if rs:
+                summ = json.loads(rs[0])
+                st["liked_songs"] = summ.get("liked_songs")
+                st["loose"] = summ.get("loose", 0)
+                st["loose_names"] = summ.get("loose_names", [])
             st["analysed"] = con.execute("SELECT COUNT(*) FROM feat WHERE kind='lib' AND audio IS NOT NULL").fetchone()[0]
         except sqlite3.Error:
             pass

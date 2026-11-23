@@ -933,10 +933,13 @@ function renderVideoGrid() {
   }
   if (S.view === "foryou") {
     const t = S.recStatus || {};
-    const based = t.taste_count ? `Based on ${t.taste_count.toLocaleString()} liked video${t.taste_count === 1 ? "" : "s"}` : "";
+    // liked songs in the library (the Liked tab) + liked-folder files that have no copy in the library
+    const nSongs = t.liked_songs ?? t.taste_count, nLoose = t.liked_songs != null ? (t.loose || 0) : 0;
+    const based = t.taste_count ? `Learned from ${nSongs.toLocaleString()} liked song${nSongs === 1 ? "" : "s"}${nLoose ? ` + ${nLoose} liked file${nLoose === 1 ? "" : "s"} not in your library` : ""}` : "";
+    const basedTip = nLoose ? `${nLoose} file${nLoose === 1 ? "" : "s"} in your liked folders ${nLoose === 1 ? "has" : "have"} no copy in your library, so ${nLoose === 1 ? "it isn't" : "they aren't"} in the Liked tab; For You still learns from how ${nLoose === 1 ? "it sounds" : "they sound"}:\n` + (t.loose_names || []).join("\n") : "";
     const nLiked = new Set(S.videos.filter(isLiked).map(songKey)).size;
     const nHidden = new Set(S.videos.filter((x) => x.rating === -1).map(songKey)).size;
-    $("#viewActions").innerHTML = `<span class="fy-meta">${esc(based)}</span>
+    $("#viewActions").innerHTML = `<span class="fy-meta" title="${esc(basedTip)}">${esc(based)}</span>
       ${S.fyTab === "rec" && S.recHist.length > 1 ? `<select class="fy-hist${S.recHistAt ? " on" : ""}" id="fyHist" title="Look back: For You's picks from before you rated more songs">
         <option value="">${S.recHistAt ? "Back to latest picks" : "Latest picks"}</option>
         ${S.recHist.slice(1).map((h) => `<option value="${h.at}" ${h.at === S.recHistAt ? "selected" : ""}>${esc(histWhen(h.at))} · ${h.liked.toLocaleString()} liked${h.note ? ` · ${esc(h.note)}` : ""}</option>`).join("")}</select>` : ""}

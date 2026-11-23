@@ -784,3 +784,4 @@ select.fy-hist { height: 32px; border-radius: 9px; border: 1px solid var(--line-
 select.fy-hist.on { border-color: rgba(167,139,250,.7); background: rgba(167,139,250,.1); color: var(--text); }
 .histnote { display: inline-flex; align-items: center; gap: 5px; color: #e9d5ff; }
 .histnote svg { width: 14px; height: 14px; }
+.fy-meta[title]:not([title=""]) { cursor: help; }
