@@ -206,6 +206,8 @@ def api_post(path: str, body: dict):
             return {"url": url}            # in a browser: the page opens a new tab itself
         open_window_hook(title, url)
         return {"ok": True}
+    if path == "/api/retry":
+        return {"ok": jm.retry(str(body.get("key") or ""))}
     if path == "/api/foryou/loose-open":
         action = str(body.get("action") or "play")
         if action == "play":

@@ -15,6 +15,31 @@ from .net import HostDown
 log = logging.getLogger("kanade.jobs")
 
 
+class Notices:
+    """Problems the user should see (bottom left, with a Retry) instead of only a log line. A notice goes away by
+    itself when the same step works again."""
+
+    def __init__(self):
+        self._d: dict[str, dict] = {}
+        self._lock = threading.Lock()
+
+    def set(self, key: str, title: str, text: str, retry: str | None = None):
+        with self._lock:
+            self._d[key] = {"key": key, "title": title, "text": text, "retry": retry, "at": time.time()}
+        log.warning("%s: %s", title, text)
+
+    def clear(self, key: str):
+        with self._lock:
+            self._d.pop(key, None)
+
+    def as_list(self) -> list[dict]:
+        with self._lock:
+            return sorted(self._d.values(), key=lambda x: x["at"])
+
+
+AUTO_RETRY = "Kanade tries again by itself at the next library check (every 30 minutes), or press Retry."
+
+
 class Progress:
     def __init__(self, name: str):
         self.name = name
@@ -66,6 +91,8 @@ class JobManager:
         self.copy = Progress("Copy")
         self.mal = Progress("MyAnimeList")       # genres / themes from MyAnimeList (own thread: never holds up scans)
         self._mal_lock = threading.Lock()
+        self._mal_wake = threading.Event()
+        self.notices = Notices()
         self.engine = recommend.EngineRunner(self.recs)
         self._rank_timer: threading.Timer | None = None
         self._rank_lock = threading.Lock()
@@ -77,7 +104,7 @@ class JobManager:
     # ---------------------------------------------------------- public API
     def status(self) -> dict:
         return {"pipeline": self.pipeline.as_dict(), "thumbs": self.thumbs.as_dict(), "recs": self.recs.as_dict(),
-                "copy": self.copy.as_dict(), "mal": self.mal.as_dict(),
+                "copy": self.copy.as_dict(), "mal": self.mal.as_dict(), "notices": self.notices.as_list(),
                 "library_version": db.version("library"), "media_version": db.version("media"),
                 "recs_version": db.version("recs"), "last_scan": self.last_scan,
                 # other windows of the app use these to pick up likes / favourites and settings changed elsewhere
@@ -119,6 +146,37 @@ class JobManager:
         return (self.pipeline.state != "running" and self.thumbs.state != "running"
                 and self._q.empty() and not self._thumb_wake.is_set())
 
+    RETRY_JOBS = {"scan": "scan", "identify": "scan", "catalog": "sync_catalog", "titles": "fill_from_anilist",
+                  "genres": "fill_genres", "content": "fill_content", "relations": "fill_relations"}
+
+    def retry(self, key: str) -> bool:
+        """The Retry button of a notice (or of a failed job)."""
+        from .net import http
+        http().reset_hosts()
+        self.notices.clear(key)
+        if key in self.RETRY_JOBS:
+            return self.submit(self.RETRY_JOBS[key])
+        if key == "covers":
+            threading.Thread(target=self._covers, kwargs={"quiet": True}, name="covers", daemon=True).start()
+        elif key == "thumbs":
+            self.wake_thumbs()
+        elif key == "mal":
+            self._mal_wake.set()
+            self.start_mal()
+        elif key == "foryou":
+            self.request_recs("analyze")
+        else:
+            return False
+        return True
+
+    def _step(self, key: str, title: str, what: str, fn):
+        """Run one online step of the library check; a failure becomes a visible notice with Retry."""
+        try:
+            fn()
+            self.notices.clear(key)
+        except Exception as e:
+            self.notices.set(key, title, f"{what} ({str(e)[:140]}). {AUTO_RETRY}", key)
+
     def start_mal(self):
         """Fetch MyAnimeList genres for series not asked yet, in the background (needs the user's client ID)."""
         cid = (settings().get("mal_client_id") or "").strip()
@@ -149,8 +207,9 @@ class JobManager:
                     resume = max(time.time() + 600, http().host_free_at("api.myanimelist.net"))
                     m.set(phase="MyAnimeList paused: the site is busy",
                           current="continues at " + time.strftime("%H:%M", time.localtime(resume)))
-                    while time.time() < resume and not self._stop.is_set():
-                        time.sleep(2)
+                    self._mal_wake.clear()
+                    while time.time() < resume and not self._stop.is_set() and not self._mal_wake.is_set():
+                        time.sleep(1)
                 err = content.mal_status()["error"]
                 m.state, m.phase = ("error", "MyAnimeList") if err else ("idle", "")
                 m.error = err or None
@@ -267,13 +326,18 @@ class JobManager:
             n = catalog.sync(lambda d, t, m: p.set(done=d, total=t, current=m))
             matcher.invalidate_index()
             log.info("catalogue synced: %s anime", n)
+            self.notices.clear("catalog")
         except (HostDown, Exception) as e:
             if catalog.catalog_size() > 0:
                 log.warning("catalogue sync failed (%s); using cached copy", e)
                 p.message = "AnimeThemes unreachable - using cached catalogue"
+                self.notices.set("catalog", "AnimeThemes catalogue", "AnimeThemes didn't answer, so its newest "
+                                 f"entries are missing (the saved copy is used meanwhile). {AUTO_RETRY}", "catalog")
             else:
                 log.warning("catalogue sync failed and no cached copy: %s", e)
                 p.message = "AnimeThemes unreachable - files will be matched by search where possible"
+                self.notices.set("catalog", "AnimeThemes catalogue", "AnimeThemes didn't answer, so videos can only "
+                                 f"be identified by search for now. {AUTO_RETRY}", "catalog")
 
     def _job_scan(self, rematch_changed=True):
         p = self.pipeline
@@ -296,25 +360,17 @@ class JobManager:
         self._covers()
         self._refresh_catalog_songs()
         if settings().get("use_anilist"):
-            try:
-                self._job_fill_from_anilist()
-            except Exception as e:
-                log.warning("AniList title fill skipped: %s", e)
-            try:
-                self._job_fill_genres()
-            except Exception as e:
-                log.warning("AniList genre fill skipped: %s", e)
-            try:
-                self._job_fill_content()
-            except Exception as e:
-                log.warning("content ratings skipped: %s", e)
+            self._step("titles", "AniList titles", "English / Japanese titles of some series are still missing",
+                       self._job_fill_from_anilist)
+            self._step("genres", "AniList genres & tags", "Genres and tags of some series are still missing",
+                       self._job_fill_genres)
+            self._step("content", "Content ratings", "Ecchi / 18+ ratings of some series are still missing",
+                       self._job_fill_content)
         self.start_mal()
         self.request_recs("analyze")
         if settings().get("use_anilist"):
-            try:
-                self._job_fill_relations()
-            except Exception as e:
-                log.warning("related series skipped: %s", e)
+            self._step("relations", "Related series (AniList)", "Sequels / prequels of some series are still missing",
+                       self._job_fill_relations)
 
     def _job_sync_catalog(self):
         self._ensure_catalog(force=True)
@@ -384,7 +440,7 @@ class JobManager:
         p.set(phase="Filling titles from AniList", done=0, total=len(rows))
         by_mal = {r["mal_id"]: r["id"] for r in rows}
         ids = sorted(by_mal)
-        changed = []
+        changed, failed = [], None
         for i in range(0, len(ids), 50):
             if self._stop.is_set():
                 break
@@ -392,6 +448,7 @@ class JobManager:
                 media_list = anilist.by_mal_ids(ids[i:i + 50])
             except Exception as e:
                 log.warning("AniList batch failed: %s", e)
+                failed = e
                 break
             with db.tx() as c:
                 now = time.time()
@@ -409,6 +466,8 @@ class JobManager:
             p.set(done=min(len(ids), i + 50))
         for aid in set(changed):
             search.reindex_anime(aid)
+        if failed is not None:
+            raise RuntimeError(f"AniList didn't answer: {failed}")
 
     def _job_fill_content(self, all=False):
         """Ecchi / 18+ ratings from AniList, Kitsu and AnimeThemes (once per series; 'all' refreshes)."""
@@ -449,7 +508,7 @@ class JobManager:
                         media_list = anilist.relations_batch(chunk, by=key)
                     except Exception as e:
                         log.warning("AniList relations batch failed (%s); the rest is fetched on the next scan", e)
-                        return
+                        raise RuntimeError(f"AniList didn't answer: {e}") from e
                     now = time.time()
                     found = set()
                     with db.tx() as c:                  # saved per batch: a quit loses at most one request
@@ -493,7 +552,7 @@ class JobManager:
                     media_list = anilist.genres_batch(chunk, by=key)
                 except Exception as e:
                     log.warning("AniList genres batch failed (%s); will retry next scan", e)
-                    return
+                    raise RuntimeError(f"AniList didn't answer: {e}") from e
                 now = time.time()
                 found = set()
                 with db.tx() as c:
@@ -538,6 +597,11 @@ class JobManager:
                                       stop_event=self._stop, after_offline=covers_in_background)
         log.info("matching: %s", stats)
         db.bump_library_version()
+        if stats.get("deferred"):
+            self.notices.set("identify", "Identifying new videos", f"{stats['deferred']} new video(s) couldn't be "
+                             f"identified yet because AniList / AnimeThemes didn't answer. {AUTO_RETRY}", "identify")
+        elif ids is None:
+            self.notices.clear("identify")
 
     def _covers(self, quiet=False):
         with self._cover_lock:
@@ -550,7 +614,7 @@ class JobManager:
         if not rows:
             return
         p.set(phase="Downloading cover art", done=0, total=len(rows), current="")
-        done = 0
+        done, failed = 0, 0
         with ThreadPoolExecutor(max_workers=4, initializer=activity.lower_thread_priority) as ex:
             futs = {ex.submit(media.cache_cover, r["id"], r["cover_url"]): r["id"] for r in rows}
             for fut in as_completed(futs):
@@ -560,6 +624,8 @@ class JobManager:
                 except Exception as e:
                     log.info("cover %s failed: %s", aid, e)
                     path = None
+                if not path:
+                    failed += 1
                 if path:
                     with db.tx() as c:
                         c.execute("UPDATE anime SET cover_path=?, cover_at=? WHERE id=?",
@@ -570,6 +636,11 @@ class JobManager:
                 if done % 40 == 0:
                     db.bump("media")
         db.bump("media")
+        if failed:
+            self.notices.set("covers", "Cover art", f"{failed} cover image(s) couldn't be downloaded. {AUTO_RETRY}",
+                             "covers")
+        else:
+            self.notices.clear("covers")
 
     def _refresh_catalog_songs(self):
         """Fill song/artist on themes created before the catalogue had them."""
@@ -596,8 +667,11 @@ class JobManager:
                 return
             try:
                 self._thumb_batch()
-            except Exception:
+                self.notices.clear("thumbs")
+            except Exception as e:
                 log.exception("thumbnail worker crashed")
+                self.notices.set("thumbs", "Thumbnails", f"Making thumbnails stopped with an error ({str(e)[:120]}). "
+                                 "It starts again by itself in 30 seconds, or press Retry.", "thumbs")
                 time.sleep(5)
 
     def _thumb_batch(self):
@@ -711,6 +785,10 @@ class JobManager:
                             t.phase = "Improving thumbnails"
                         if res[2] is None and res[0]["thumb_state"] == 0:
                             log.warning("no thumbnail for %s (unreadable or corrupt?)", res[0]["path"])
+                            self._unreadable = getattr(self, "_unreadable", 0) + 1
+                            self.notices.set("thumbs_bad", "Thumbnails", f"{self._unreadable} video(s) couldn't be "
+                                             "read to make a thumbnail (the file may be damaged); they still play "
+                                             "if your player can open them. Details are in the log.")
                     except Exception:
                         if not self._stop.is_set():       # work cancelled because Kanade is closing: not an error
                             log.exception("thumbnail job failed")

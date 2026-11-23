@@ -514,8 +514,14 @@ class EngineRunner:
         try:                                      # liked files -> library copies of the same openings (names only)
             from . import tastematch
             tastematch.refresh(taste_folders())
-        except Exception:
+        except Exception as e:
             log.exception("matching liked files to the library failed")
+            try:
+                from .jobs import manager
+                manager().notices.set("tastematch", "For You", "Matching your liked folders to the library failed "
+                                      f"({str(e)[:120]}); it is tried again at the next analysis.", "foryou")
+            except Exception:
+                pass
         p.state, p.error = "running", None
         p.set(phase="Ranking" if rank_only else "Analysing videos", done=0, total=0, current="")
         cmd = [str(engine_python()), str(analyzer_script()), "--home", str(data_dir()), "--ffmpeg", ff, "--ffprobe", fp,

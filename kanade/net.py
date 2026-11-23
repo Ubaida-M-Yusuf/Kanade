@@ -117,6 +117,11 @@ class Http:
     def host_available(self, host: str) -> bool:
         return time.time() >= self._down_until.get(host, 0)
 
+    def reset_hosts(self):
+        """A manual Retry: try every site again now, even one that failed a moment ago."""
+        self._down_until.clear()
+        self._fails.clear()
+
     def host_free_at(self, host: str) -> float:
         """When a host that kept failing will be tried again (0 = now)."""
         return self._down_until.get(host, 0)

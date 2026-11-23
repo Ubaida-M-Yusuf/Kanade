@@ -2611,10 +2611,12 @@ document.addEventListener("click", (e) => {
 });
 
 /* ------------------------------------------------------------------ jobs / polling */
-function jobHTML(name, j) {
+function jobHTML(name, j, retryKey = null) {
   if (!j || (j.state === "idle" && !j.error)) return "";
+  const paused = /paused/i.test(j.phase || "");
+  const retry = retryKey && (j.state === "error" || paused) ? `<button class="hlink inline jretry" data-retry="${retryKey}">${paused ? "Retry now" : "Retry"}</button>` : "";
   const pct = j.total ? Math.min(100, (j.done / j.total) * 100) : 0;
-  return `<div class="job ${j.state === "error" ? "err" : ""}"><div class="job-top"><b>${esc(j.phase || name)}</b><span>${j.total ? `${j.done.toLocaleString()}/${j.total.toLocaleString()}` : ""}</span></div>
+  return `<div class="job ${j.state === "error" ? "err" : ""}"><div class="job-top"><b>${esc(j.phase || name)}</b>${retry}<span>${j.total ? `${j.done.toLocaleString()}/${j.total.toLocaleString()}` : ""}</span></div>
     <div class="job-cur">${esc(j.state === "error" ? (j.error || j.message) : (j.current || j.message || ""))}</div>
     ${j.state === "running" ? `<div class="bar ${j.total ? "" : "indet"}"><i style="width:${pct}%"></i></div>` : ""}</div>`;
 }
@@ -2635,11 +2637,25 @@ async function applyMarks() {
   } catch (e) { /* next poll */ }
 }
 
+$("#jobs").addEventListener("click", async (e) => {
+  const r = e.target.closest("[data-retry]");
+  if (r) {
+    r.disabled = true; r.textContent = "Retrying…";
+    try { await api.post("/api/retry", { key: r.dataset.retry }); } catch (err) { toast(err.message, true); }
+    return;
+  }
+  const d = e.target.closest("[data-jdismiss]");
+  if (d) { (S.dismissed = S.dismissed || new Set()).add(d.dataset.jdismiss); d.closest(".job").remove(); }
+});
+
 async function poll() {
   try {
     const st = await api.get("/api/status");
-    $("#jobs").innerHTML = jobHTML("Library", st.pipeline) + jobHTML("Thumbnails", st.thumbs) + jobHTML("For You", st.recs) +
-      (st.mal && (st.mal.state === "running" || st.mal.state === "error") ? jobHTML("MyAnimeList", st.mal) : "") +
+    $("#jobs").innerHTML = jobHTML("Library", st.pipeline, "scan") + jobHTML("Thumbnails", st.thumbs, "thumbs") + jobHTML("For You", st.recs, "foryou") +
+      (st.mal && (st.mal.state === "running" || st.mal.state === "error") ? jobHTML("MyAnimeList", st.mal, /client ID/i.test(st.mal.error || "") ? null : "mal") : "") +
+      (st.notices || []).filter((x) => !S.dismissed?.has(x.key + "@" + x.at)).map((x) => `<div class="job notice"><div class="job-top"><b>${icon("info")}${esc(x.title)}</b>
+        <span>${x.retry ? `<button class="hlink inline jretry" data-retry="${esc(x.retry)}">Retry</button>` : ""}<button class="icon-btn jx" data-jdismiss="${esc(x.key + "@" + x.at)}" title="Hide this message">${icon("x")}</button></span></div>
+        <div class="job-cur wrap">${esc(x.text)}</div></div>`).join("") +
       (st.copy && st.copy.state === "running" ? jobHTML("Copy", st.copy) : "");
     if (S.copyWatch && st.copy && st.copy.state !== "running") { S.copyWatch = false; toast(st.copy.message || "Copy finished", st.copy.state === "error"); }
     const recWasRunning = S.recProgress && S.recProgress.state === "running";

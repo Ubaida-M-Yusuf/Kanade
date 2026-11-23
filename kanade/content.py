@@ -244,7 +244,7 @@ def refresh(progress=None, only_missing: bool = True, should_stop=lambda: False,
         reclassify_all()
     rows = db.q(f"SELECT id, at_id, anilist_id, mal_id, content, genres, tags FROM anime WHERE {where}"
                 "id IN (SELECT anime_id FROM v_video) ORDER BY id")
-    total, done, updated = len(rows), 0, 0
+    total, done, updated, incomplete = len(rows), 0, 0, False
     if total and on_start:
         on_start(total)                       # only now is there something to fetch (and a progress bar to show)
     for i in range(0, total, CHUNK):
@@ -268,10 +268,13 @@ def refresh(progress=None, only_missing: bool = True, should_stop=lambda: False,
             progress(done, total, f"{done}/{total} series")
         if not complete:
             log.warning("content ratings: a source did not answer; the rest is retried on the next scan")
+            incomplete = True
             break
     if total or marked is not None:
         log.info("content ratings updated for %s series%s", updated,
                  f" ({marked} NSFW-marked videos)" if marked is not None else "")
+    if incomplete:
+        raise RuntimeError(f"AniList or Kitsu didn't answer; {total - done} series still wait for content ratings")
     return updated
 
 

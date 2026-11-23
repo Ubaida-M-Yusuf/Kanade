@@ -821,3 +821,13 @@ select.fy-hist:hover { color: var(--text); border-color: rgba(255,255,255,.18); 
 .rel-arrow.l { left: 2px; } .rel-arrow.l svg { transform: rotate(180deg); }
 .rel-arrow.r { right: 2px; }
 .rel-wrap.can-l .rel-arrow.l, .rel-wrap.can-r .rel-arrow.r { display: grid; }
+
+/* sidebar notices: something didn't work, with Retry */
+.job.notice { border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.06); }
+.job.notice .job-top b { display: inline-flex; align-items: center; gap: 6px; color: #fde68a; }
+.job.notice .job-top b svg { width: 14px; height: 14px; }
+.job .job-top span { display: inline-flex; align-items: center; gap: 4px; }
+.job .job-cur.wrap { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.35; }
+.job .jretry { height: 22px; padding: 0 8px; font-size: 11.5px; }
+.job .icon-btn.jx { width: 22px; height: 22px; }
+.job .icon-btn.jx svg { width: 12px; height: 12px; }
